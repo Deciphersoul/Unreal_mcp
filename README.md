@@ -143,6 +143,17 @@ Then enable Python execution in: Edit > Project Settings > Plugins > Remote Cont
 }
 ```
 
+### Cross-Tool Configuration (OpenCode, Codex, etc.)
+
+For projects using multiple AI tools (OpenCode, Codex, etc.), this repository now includes a **centralized configuration structure** in `.ai-config/`:
+
+- **`.ai-config/context.md`** - Shared project context and conventions
+- **`.ai-config/agents/`** - Reusable AI agent definitions (ue-assistant, ue-debugger, etc.)
+- **`.ai-config/mcp-config.json`** - MCP server settings (ports, paths)
+- **`.ai-config/tools/`** - Tool-specific configurations
+
+See [`.ai-config/README.md`](.ai-config/README.md) for details on cross-tool compatibility.
+
 ## Available Tools (23)
 
 | Tool | Description |

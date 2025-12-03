@@ -53,9 +53,20 @@ If tools fail with 400 "cannot be accessed remotely":
 - This is **expected** in Limited Mode for Python-dependent features
 - Enable Full Mode settings above if you need those features
 
+## Configuration Structure
+
+**NEW (2025-12-03)**: Centralized AI tool configuration in `.ai-config/` directory for cross-tool compatibility.
+
+- **Shared context**: `.ai-config/context.md` (moved from `.opencode/CONTEXT.md`)
+- **Shared agents**: `.ai-config/agents/` (moved from `.opencode/agent/`)
+- **MCP config**: `.ai-config/mcp-config.json` (shared server settings)
+- **Tool configs**: `.ai-config/tools/` (OpenCode, Codex, etc.)
+
+See `.ai-config/README.md` for full documentation.
+
 ## Agents
 
-See `.opencode/agent/` for agent definitions.
+Agent definitions are now in `.ai-config/agents/` for use by all AI tools (OpenCode, Codex, etc.).
 
 | Agent | Purpose |
 |-------|---------|
