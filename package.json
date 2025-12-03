@@ -1,8 +1,8 @@
 {
-  "name": "unreal-engine-mcp-server",
-  "version": "0.4.7",
-  "mcpName": "io.github.ChiR24/unreal-engine-mcp",
-  "description": "A comprehensive Model Context Protocol (MCP) server that enables AI assistants to control Unreal Engine via Remote Control API. Built with TypeScript and designed for game development automation.",
+  "name": "ue-mcp-extended",
+  "version": "0.7.0",
+  "mcpName": "io.github.Deciphersoul/ue-mcp-extended",
+  "description": "Extended Unreal Engine MCP server with debugging, query, selection, and build tools for AI-driven game development. Forked from ChiR24/Unreal_mcp.",
   "type": "module",
   "module": "src/index.ts",
   "main": "dist/index.js",
@@ -14,7 +14,6 @@
     "build": "tsc -p tsconfig.json",
     "build:watch": "tsc -p tsconfig.json --watch",
     "start": "node dist/cli.js",
-
     "dev": "ts-node-esm src/cli.ts",
     "lint": "eslint . --ext .ts",
     "lint:fix": "eslint . --ext .ts --fix",

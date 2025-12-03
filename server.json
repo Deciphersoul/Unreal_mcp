@@ -18,11 +18,11 @@
           "isRequired": false,
           "value": "127.0.0.1"
         },
-        {
+{
           "name": "UE_RC_HTTP_PORT",
-          "description": "Remote Control HTTP port (default: 30010)",
+          "description": "Remote Control HTTP port (default: 30000 for UE 5.7)",
           "isRequired": false,
-          "value": "30010"
+          "value": "30000"
         },
         {
           "name": "UE_RC_WS_PORT",

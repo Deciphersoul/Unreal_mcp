@@ -1,6 +1,7 @@
 import { UnrealBridge } from '../unreal-bridge.js';
 import { Logger } from '../utils/logger.js';
 import { interpretStandardResult } from '../utils/result-helpers.js';
+import { SequenceKeyframeTools } from './sequence-keyframes.js';
 
 export interface LevelSequence {
   path: string;
@@ -28,8 +29,11 @@ export class SequenceTools {
   private sequenceCache = new Map<string, LevelSequence>();
   private retryAttempts = 3;
   private retryDelay = 1000;
+  private keyframeTools: SequenceKeyframeTools;
   
-  constructor(private bridge: UnrealBridge) {}
+  constructor(private bridge: UnrealBridge) {
+    this.keyframeTools = new SequenceKeyframeTools(bridge);
+  }
 
     private async ensureSequencerPrerequisites(operation: string): Promise<string[] | null> {
         const missing = await this.bridge.ensurePluginsEnabled(['LevelSequenceEditor', 'Sequencer'], operation);
@@ -894,16 +898,64 @@ try:
         if not actor_class:
             print('RESULT:' + json.dumps({'success': False, 'error': f'Class {class_name} not found'}))
         else:
-            spawnable = ls.add_spawnable_from_class(seq, actor_class)
+            spawnable = None
+            binding_name = ''
+            
+            # Method 1: Try LevelSequenceEditorSubsystem.add_spawnable_from_class
+            if ls and hasattr(ls, 'add_spawnable_from_class'):
+                try:
+                    spawnable = ls.add_spawnable_from_class(seq, actor_class)
+                except Exception as e1:
+                    pass
+            
+            # Method 2: Try MovieSceneSequenceExtensions.add_spawnable_from_class
+            if not spawnable and hasattr(unreal.MovieSceneSequenceExtensions, 'add_spawnable_from_class'):
+                try:
+                    spawnable = unreal.MovieSceneSequenceExtensions.add_spawnable_from_class(seq, actor_class)
+                except Exception as e2:
+                    pass
+            
+            # Method 3: Try adding via LevelSequenceEditorBlueprintLibrary
+            if not spawnable and hasattr(unreal, 'LevelSequenceEditorBlueprintLibrary'):
+                lib = unreal.LevelSequenceEditorBlueprintLibrary
+                if hasattr(lib, 'add_spawnable_from_class'):
+                    try:
+                        spawnable = lib.add_spawnable_from_class(actor_class)
+                    except Exception as e3:
+                        pass
+            
+            # Method 4: Spawn actor in world and add as possessable, then convert
+            if not spawnable:
+                try:
+                    # Spawn temporary actor
+                    world = unreal.EditorLevelLibrary.get_editor_world()
+                    temp_actor = unreal.EditorLevelLibrary.spawn_actor_from_class(actor_class, unreal.Vector(0, 0, 0))
+                    if temp_actor:
+                        # Add to sequence as spawnable
+                        spawnable = unreal.MovieSceneSequenceExtensions.add_spawnable_from_instance(seq, temp_actor)
+                        binding_name = temp_actor.get_actor_label()
+                        # Delete the temp actor
+                        unreal.EditorLevelLibrary.destroy_actor(temp_actor)
+                except Exception as e4:
+                    pass
+            
             if spawnable:
-                binding_id = unreal.MovieSceneSequenceExtensions.get_binding_id(seq, spawnable)
+                try:
+                    binding_id = str(unreal.MovieSceneSequenceExtensions.get_binding_id(seq, spawnable)) if hasattr(unreal.MovieSceneSequenceExtensions, 'get_binding_id') else 'unknown'
+                    if not binding_name:
+                        binding_name = unreal.MovieSceneBindingExtensions.get_name(spawnable) if hasattr(unreal.MovieSceneBindingExtensions, 'get_name') else class_name
+                except:
+                    binding_id = 'unknown'
+                    binding_name = class_name
+                
                 print('RESULT:' + json.dumps({
                     'success': True,
-                    'spawnableId': str(binding_id),
+                    'spawnableId': binding_id,
+                    'bindingName': binding_name,
                     'className': class_name
                 }))
             else:
-                print('RESULT:' + json.dumps({'success': False, 'error': 'Failed to create spawnable'}))
+                print('RESULT:' + json.dumps({'success': False, 'error': f'Failed to create spawnable from {class_name}. UE5.7 API may not support this operation via Python.'}))
 except Exception as e:
     print('RESULT:' + json.dumps({'success': False, 'error': str(e)}))
 `.trim();
@@ -914,5 +966,45 @@ except Exception as e:
     );
     
     return this.parsePythonResult(resp, 'addSpawnableFromClass');
+  }
+
+  // Delegate keyframe and camera cut operations to SequenceKeyframeTools
+  async addTransformKeyframe(params: Parameters<SequenceKeyframeTools['addTransformKeyframe']>[0]) {
+    return this.keyframeTools.addTransformKeyframe(params);
+  }
+
+  async addCameraCutTrack(params?: Parameters<SequenceKeyframeTools['addCameraCutTrack']>[0]) {
+    return this.keyframeTools.addCameraCutTrack(params);
+  }
+
+  async addCameraCut(params: Parameters<SequenceKeyframeTools['addCameraCut']>[0]) {
+    return this.keyframeTools.addCameraCut(params);
+  }
+
+  async getTracks(params: Parameters<SequenceKeyframeTools['getTracks']>[0]) {
+    return this.keyframeTools.getTracks(params);
+  }
+
+  // Phase 7.8: Property Tracks
+  async addPropertyTrack(params: Parameters<SequenceKeyframeTools['addPropertyTrack']>[0]) {
+    return this.keyframeTools.addPropertyTrack(params);
+  }
+
+  async addPropertyKeyframe(params: Parameters<SequenceKeyframeTools['addPropertyKeyframe']>[0]) {
+    return this.keyframeTools.addPropertyKeyframe(params);
+  }
+
+  // Phase 7.9: Audio Tracks
+  async addAudioTrack(params: Parameters<SequenceKeyframeTools['addAudioTrack']>[0]) {
+    return this.keyframeTools.addAudioTrack(params);
+  }
+
+  // Phase 7.10: Event Tracks
+  async addEventTrack(params: Parameters<SequenceKeyframeTools['addEventTrack']>[0]) {
+    return this.keyframeTools.addEventTrack(params);
+  }
+
+  async addEventKey(params: Parameters<SequenceKeyframeTools['addEventKey']>[0]) {
+    return this.keyframeTools.addEventKey(params);
   }
 }

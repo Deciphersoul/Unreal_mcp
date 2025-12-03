@@ -29,6 +29,15 @@ import { IntrospectionTools } from './tools/introspection.js';
 import { VisualTools } from './tools/visual.js';
 import { EngineTools } from './tools/engine.js';
 import { LogTools } from './tools/logs.js';
+import { QueryLevelTools } from './tools/query-level.js';
+import { ManageSelectionTools } from './tools/manage-selection.js';
+import { DebugToolsExtended } from './tools/debug-tools-extended.js';
+import { EditorLifecycleTools } from './tools/editor-lifecycle.js';
+import { ProjectBuildTools } from './tools/project-build.js';
+import { CppTools } from './tools/cpp.js';
+import { RenderingTools } from './tools/rendering.js';
+import { InputTools } from './tools/input.js';
+import { CollisionTools } from './tools/collision.js';
 import { consolidatedToolDefinitions } from './tools/consolidated-tool-definitions.js';
 import { handleConsolidatedToolCall } from './tools/consolidated-tool-handlers.js';
 import { prompts } from './prompts/index.js';
@@ -89,7 +98,7 @@ const CONFIG = {
   RETRY_DELAY_MS: 2000,
   // Server info
   SERVER_NAME: 'unreal-engine-mcp',
-  SERVER_VERSION: '0.4.7',
+  SERVER_VERSION: '0.7.0',
   // Monitoring
   HEALTH_CHECK_INTERVAL_MS: 30000 // 30 seconds
 };
@@ -239,6 +248,15 @@ export function createServer() {
   const visualTools = new VisualTools(bridge);
   const engineTools = new EngineTools(bridge);
   const logTools = new LogTools(bridge);
+  const queryLevelTools = new QueryLevelTools(bridge);
+  const manageSelectionTools = new ManageSelectionTools(bridge);
+  const debugToolsExtended = new DebugToolsExtended(bridge);
+  const editorLifecycleTools = new EditorLifecycleTools(bridge);
+  const projectBuildTools = new ProjectBuildTools(bridge);
+  const cppTools = new CppTools(bridge);
+  const renderingTools = new RenderingTools(bridge);
+  const inputTools = new InputTools(bridge);
+  const collisionTools = new CollisionTools(bridge);
 
   const server = new Server(
     {
@@ -423,7 +441,7 @@ export function createServer() {
         unrealConnection: {
           status: bridge.isConnected ? 'connected' : 'disconnected',
           host: process.env.UE_HOST || 'localhost',
-          httpPort: process.env.UE_RC_HTTP_PORT || 30010,
+          httpPort: process.env.UE_RC_HTTP_PORT || 30000,
           wsPort: process.env.UE_RC_WS_PORT || 30020,
           engineVersion: versionInfo,
           features: {
@@ -519,6 +537,15 @@ export function createServer() {
       visualTools,
       engineTools,
       logTools,
+      queryLevelTools,
+      manageSelectionTools,
+      debugToolsExtended,
+      editorLifecycleTools,
+      projectBuildTools,
+      cppTools,
+      renderingTools,
+      inputTools,
+      collisionTools,
       // Elicitation (client-optional)
       elicit: elicitation.elicit,
       supportsElicitation: elicitation.supports,
@@ -694,7 +721,7 @@ export function createServer() {
 // Export configuration schema for Smithery session UI and validation
 export const configSchema = z.object({
   ueHost: z.string().optional().default('127.0.0.1').describe('Unreal Engine host (e.g. 127.0.0.1)'),
-  ueHttpPort: z.number().int().optional().default(30010).describe('Remote Control HTTP port'),
+  ueHttpPort: z.number().int().optional().default(30000).describe('Remote Control HTTP port'),
   ueWsPort: z.number().int().optional().default(30020).describe('Remote Control WebSocket port'),
   logLevel: z.enum(['debug', 'info', 'warn', 'error']).optional().default('info').describe('Runtime log level'),
   projectPath: z.string().optional().default('C:/Users/YourName/Documents/Unreal Projects/YourProject').describe('Absolute path to your Unreal .uproject file')

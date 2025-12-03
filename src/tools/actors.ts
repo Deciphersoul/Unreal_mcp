@@ -2,11 +2,430 @@ import { UnrealBridge } from '../unreal-bridge.js';
 import { ensureRotation, ensureVector3 } from '../utils/validation.js';
 import { coerceString, coerceVector3, interpretStandardResult } from '../utils/result-helpers.js';
 import { escapePythonString } from '../utils/python.js';
+import { Logger } from '../utils/logger.js';
+
+const log = new Logger('ActorTools');
+
+/** Shape name to engine asset path mapping */
+const SHAPE_MAPPING: Record<string, string> = {
+  cube: '/Engine/BasicShapes/Cube',
+  sphere: '/Engine/BasicShapes/Sphere',
+  cylinder: '/Engine/BasicShapes/Cylinder',
+  cone: '/Engine/BasicShapes/Cone',
+  plane: '/Engine/BasicShapes/Plane',
+  torus: '/Engine/BasicShapes/Torus'
+};
+
+/** Common actor class name to full script path mapping */
+const CLASS_MAP: Record<string, string> = {
+  'PointLight': '/Script/Engine.PointLight',
+  'DirectionalLight': '/Script/Engine.DirectionalLight',
+  'SpotLight': '/Script/Engine.SpotLight',
+  'RectLight': '/Script/Engine.RectLight',
+  'SkyLight': '/Script/Engine.SkyLight',
+  'StaticMeshActor': '/Script/Engine.StaticMeshActor',
+  'PlayerStart': '/Script/Engine.PlayerStart',
+  'Camera': '/Script/Engine.CameraActor',
+  'CameraActor': '/Script/Engine.CameraActor',
+  'Pawn': '/Script/Engine.DefaultPawn',
+  'Character': '/Script/Engine.Character',
+  'TriggerBox': '/Script/Engine.TriggerBox',
+  'TriggerSphere': '/Script/Engine.TriggerSphere',
+  'BlockingVolume': '/Script/Engine.BlockingVolume',
+  'PostProcessVolume': '/Script/Engine.PostProcessVolume',
+  'LightmassImportanceVolume': '/Script/Engine.LightmassImportanceVolume',
+  'NavMeshBoundsVolume': '/Script/Engine.NavMeshBoundsVolume',
+  'ExponentialHeightFog': '/Script/Engine.ExponentialHeightFog',
+  'AtmosphericFog': '/Script/Engine.AtmosphericFog',
+  'SphereReflectionCapture': '/Script/Engine.SphereReflectionCapture',
+  'BoxReflectionCapture': '/Script/Engine.BoxReflectionCapture',
+  'DecalActor': '/Script/Engine.DecalActor'
+};
+
+/** Spawn method types */
+type SpawnMethod = 'mesh' | 'class';
+
+export interface SpawnResult {
+  success: boolean;
+  message: string;
+  actorName?: string;
+  actorPath?: string;
+  resolvedClass?: string;
+  requestedClass?: string;
+  location?: { x: number; y: number; z: number };
+  rotation?: { pitch: number; yaw: number; roll: number };
+  warnings?: string[];
+  details?: string[];
+  pythonFallbackUsed?: boolean;
+  spawnMethod?: 'DirectRC' | 'Python';
+}
+
+export interface DeleteResult {
+  success: boolean;
+  message: string;
+  deleted?: string;
+  error?: string;
+  pythonFallbackUsed?: boolean;
+  deleteMethod?: 'DirectRC' | 'Python';
+}
+
+export interface TransformResult {
+  success: boolean;
+  message: string;
+  actorName?: string;
+  location?: { x: number; y: number; z: number };
+  rotation?: { pitch: number; yaw: number; roll: number };
+  scale?: { x: number; y: number; z: number };
+  error?: string;
+  method?: 'DirectRC' | 'Python';
+}
+
+export interface BatchSpawnResult {
+  success: boolean;
+  message: string;
+  spawned: Array<{ name: string; location: { x: number; y: number; z: number } }>;
+  count: number;
+  errors?: string[];
+}
+
+export interface SetMaterialResult {
+  success: boolean;
+  message: string;
+  actorName?: string;
+  materialPath?: string;
+  error?: string;
+}
 
 export class ActorTools {
   constructor(private bridge: UnrealBridge) {}
 
-  async spawn(params: { classPath: string; location?: { x: number; y: number; z: number }; rotation?: { pitch: number; yaw: number; roll: number }; actorName?: string }) {
+  /**
+   * Determine whether to use mesh spawn (SpawnActorFromObject) or class spawn (SpawnActorFromClass)
+   * @returns 'mesh' for asset paths, 'class' for class-based actors
+   */
+  private determineSpawnMethod(classPath: string): { method: SpawnMethod; resolvedPath: string } {
+    const lowerName = classPath.toLowerCase();
+    
+    // Check if it's a shape name that maps to a mesh
+    if (SHAPE_MAPPING[lowerName]) {
+      return { method: 'mesh', resolvedPath: SHAPE_MAPPING[lowerName] };
+    }
+    
+    // Check if it starts with /Engine/BasicShapes/ - mesh spawn
+    if (classPath.startsWith('/Engine/BasicShapes/')) {
+      return { method: 'mesh', resolvedPath: classPath };
+    }
+    
+    // Check if it's a /Game/ path - could be Blueprint or StaticMesh asset
+    if (classPath.startsWith('/Game/')) {
+      return { method: 'mesh', resolvedPath: classPath };
+    }
+    
+    // Check if it's in our class map - class spawn
+    if (CLASS_MAP[classPath]) {
+      return { method: 'class', resolvedPath: CLASS_MAP[classPath] };
+    }
+    
+    // Check if it's already a /Script/ path - class spawn
+    if (classPath.startsWith('/Script/')) {
+      return { method: 'class', resolvedPath: classPath };
+    }
+    
+    // Check if it starts with /Engine/ but not BasicShapes - assume mesh
+    if (classPath.startsWith('/Engine/')) {
+      return { method: 'mesh', resolvedPath: classPath };
+    }
+    
+    // Default: assume it's a class name, resolve to /Script/Engine.ClassName
+    return { method: 'class', resolvedPath: `/Script/Engine.${classPath}` };
+  }
+
+  /**
+   * Spawn actor using Direct Remote Control API
+   * Tries SpawnActorFromObject for meshes, SpawnActorFromClass for classes
+   */
+  private async spawnViaDirectRC(params: {
+    classPath: string;
+    location: { x: number; y: number; z: number };
+    rotation: { pitch: number; yaw: number; roll: number };
+    actorName?: string;
+  }): Promise<SpawnResult> {
+    const { method, resolvedPath } = this.determineSpawnMethod(params.classPath);
+    
+    const location = {
+      X: params.location.x,
+      Y: params.location.y,
+      Z: params.location.z
+    };
+    
+    const rotation = {
+      Pitch: params.rotation.pitch,
+      Yaw: params.rotation.yaw,
+      Roll: params.rotation.roll
+    };
+    
+    log.debug(`Attempting Direct RC spawn: method=${method}, path=${resolvedPath}`);
+    
+    try {
+      let result: any;
+      
+      if (method === 'mesh') {
+        // For mesh assets, use SpawnActorFromObject
+        // Need to append .AssetName for the object reference
+        let objectPath = resolvedPath;
+        if (!objectPath.includes('.')) {
+          // Extract asset name from path and append it
+          const assetName = objectPath.split('/').pop();
+          objectPath = `${resolvedPath}.${assetName}`;
+        }
+        
+        result = await this.bridge.call({
+          objectPath: '/Script/UnrealEd.Default__EditorActorSubsystem',
+          functionName: 'SpawnActorFromObject',
+          parameters: {
+            ObjectToUse: objectPath,
+            Location: location,
+            Rotation: rotation
+          }
+        });
+      } else {
+        // For class-based actors, use SpawnActorFromClass
+        result = await this.bridge.call({
+          objectPath: '/Script/UnrealEd.Default__EditorActorSubsystem',
+          functionName: 'SpawnActorFromClass',
+          parameters: {
+            ActorClass: resolvedPath,
+            Location: location,
+            Rotation: rotation
+          }
+        });
+      }
+      
+      // Check if spawn succeeded - ReturnValue should be the actor path
+      const actorPath = result?.ReturnValue;
+      if (!actorPath || actorPath === 'None' || actorPath === '') {
+        throw new Error(`Direct RC spawn returned empty result for ${resolvedPath}`);
+      }
+      
+      // Extract actor name from path (last component)
+      let actorName = actorPath.split('.').pop() || actorPath.split(':').pop() || 'SpawnedActor';
+      
+      // If a custom name was requested, try to rename the actor
+      if (params.actorName) {
+        try {
+          await this.bridge.call({
+            objectPath: actorPath,
+            functionName: 'SetActorLabel',
+            parameters: {
+              NewActorLabel: params.actorName
+            }
+          });
+          actorName = params.actorName;
+        } catch (renameErr) {
+          log.debug(`Could not rename actor to ${params.actorName}: ${renameErr}`);
+          // Not fatal, continue with auto-generated name
+        }
+      }
+      
+      return {
+        success: true,
+        message: `Spawned ${actorName} at (${params.location.x}, ${params.location.y}, ${params.location.z})`,
+        actorName,
+        actorPath,
+        resolvedClass: resolvedPath,
+        requestedClass: params.classPath,
+        location: params.location,
+        rotation: params.rotation,
+        spawnMethod: 'DirectRC'
+      };
+      
+    } catch (error: any) {
+      log.debug(`Direct RC spawn failed: ${error?.message || error}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete actor using Direct Remote Control API
+   */
+  private async deleteViaDirectRC(actorName: string): Promise<DeleteResult> {
+    log.debug(`Attempting Direct RC delete for actor: ${actorName}`);
+    
+    try {
+      // First, we need to find the actor by name/label
+      // Use GetAllLevelActors and filter
+      const getAllResult = await this.bridge.call({
+        objectPath: '/Script/UnrealEd.Default__EditorActorSubsystem',
+        functionName: 'GetAllLevelActors',
+        parameters: {}
+      });
+      
+      const actors = getAllResult?.ReturnValue || [];
+      if (!Array.isArray(actors) || actors.length === 0) {
+        throw new Error('No actors found in level');
+      }
+      
+      // Find the actor with matching label (case-insensitive)
+      const lowerActorName = actorName.toLowerCase();
+      let targetActorPath: string | null = null;
+      
+      for (const actorPath of actors) {
+        if (!actorPath || typeof actorPath !== 'string') continue;
+        
+        try {
+          // Get the actor label
+          const labelResult = await this.bridge.call({
+            objectPath: actorPath,
+            functionName: 'GetActorLabel',
+            parameters: {}
+          });
+          
+          const label = labelResult?.ReturnValue || '';
+          if (label.toLowerCase() === lowerActorName || 
+              label.toLowerCase().startsWith(lowerActorName + '_')) {
+            targetActorPath = actorPath;
+            break;
+          }
+          
+          // Also check the object name (last part of path)
+          const objName = actorPath.split('.').pop() || actorPath.split(':').pop() || '';
+          if (objName.toLowerCase() === lowerActorName) {
+            targetActorPath = actorPath;
+            break;
+          }
+        } catch {
+          // Skip actors we can't query
+          continue;
+        }
+      }
+      
+      if (!targetActorPath) {
+        throw new Error(`Actor not found: ${actorName}`);
+      }
+      
+      // Destroy the actor
+      const destroyResult = await this.bridge.call({
+        objectPath: '/Script/UnrealEd.Default__EditorActorSubsystem',
+        functionName: 'DestroyActor',
+        parameters: {
+          ActorToDestroy: targetActorPath
+        }
+      });
+      
+      const success = destroyResult?.ReturnValue === true || destroyResult?.ReturnValue === 'true';
+      
+      if (!success) {
+        throw new Error(`DestroyActor returned false for ${actorName}`);
+      }
+      
+      return {
+        success: true,
+        message: `Deleted actor: ${actorName}`,
+        deleted: actorName,
+        deleteMethod: 'DirectRC'
+      };
+      
+    } catch (error: any) {
+      log.debug(`Direct RC delete failed: ${error?.message || error}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete an actor by name
+   * Tries Direct RC API first, falls back to Python if needed
+   */
+  async delete(actorName: string): Promise<DeleteResult> {
+    if (!actorName || typeof actorName !== 'string' || actorName.trim().length === 0) {
+      throw new Error(`Invalid actorName: ${actorName}`);
+    }
+    
+    const trimmedName = actorName.trim();
+    
+    // Try Direct RC first
+    try {
+      const result = await this.deleteViaDirectRC(trimmedName);
+      return result;
+    } catch (directRcError: any) {
+      log.debug(`Direct RC delete failed, falling back to Python: ${directRcError?.message}`);
+      
+      // Fall back to Python-based deletion
+      try {
+        const pythonResult = await this.deleteViaPython(trimmedName);
+        return {
+          ...pythonResult,
+          pythonFallbackUsed: true,
+          deleteMethod: 'Python'
+        };
+      } catch (pythonError: any) {
+        throw new Error(`Failed to delete actor '${trimmedName}': Direct RC error: ${directRcError?.message}. Python fallback error: ${pythonError?.message}`);
+      }
+    }
+  }
+
+  /**
+   * Delete actor using Python (fallback method)
+   */
+  private async deleteViaPython(actorName: string): Promise<DeleteResult> {
+    const escapedName = escapePythonString(actorName);
+    
+    const pythonCmd = `
+import unreal
+import json
+
+result = {"success": False, "deleted": "", "error": ""}
+
+try:
+    subsys = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
+    if subsys:
+        actors = subsys.get_all_level_actors()
+        found = False
+        actor_name = "${escapedName}"
+        actor_name_lower = actor_name.lower()
+        
+        for actor in actors:
+            if not actor:
+                continue
+            try:
+                label = actor.get_actor_label()
+                name = actor.get_name()
+                if label.lower() == actor_name_lower or name.lower() == actor_name_lower or label.lower().startswith(actor_name_lower + "_"):
+                    success = subsys.destroy_actor(actor)
+                    result["success"] = success
+                    result["deleted"] = label or name
+                    found = True
+                    break
+            except Exception:
+                continue
+        
+        if not found:
+            result["error"] = f"Actor not found: {actor_name}"
+    else:
+        result["error"] = "EditorActorSubsystem not available"
+except Exception as e:
+    result["error"] = str(e)
+
+print('RESULT:' + json.dumps(result))
+`.trim();
+
+    const response = await this.bridge.executePython(pythonCmd);
+    const interpreted = interpretStandardResult(response, {
+      successMessage: `Deleted actor ${actorName}`,
+      failureMessage: `Failed to delete actor ${actorName}`
+    });
+    
+    if (!interpreted.success) {
+      throw new Error(interpreted.error || interpreted.message);
+    }
+    
+    return {
+      success: true,
+      message: interpreted.message,
+      deleted: coerceString(interpreted.payload.deleted) || actorName
+    };
+  }
+
+  async spawn(params: { classPath: string; location?: { x: number; y: number; z: number }; rotation?: { pitch: number; yaw: number; roll: number }; actorName?: string }): Promise<SpawnResult> {
     if (!params.classPath || typeof params.classPath !== 'string' || params.classPath.trim().length === 0) {
       throw new Error(`Invalid classPath: ${params.classPath}`);
     }
@@ -16,20 +435,10 @@ export class ActorTools {
     if (params.actorName !== undefined && (!requestedActorName || requestedActorName.length === 0)) {
       throw new Error(`Invalid actorName: ${params.actorName}`);
     }
-  const sanitizedActorName = requestedActorName?.replace(/[^A-Za-z0-9_-]/g, '_');
+    const sanitizedActorName = requestedActorName?.replace(/[^A-Za-z0-9_-]/g, '_');
     const lowerName = className.toLowerCase();
 
-    const shapeMapping: Record<string, string> = {
-      cube: '/Engine/BasicShapes/Cube',
-      sphere: '/Engine/BasicShapes/Sphere',
-      cylinder: '/Engine/BasicShapes/Cylinder',
-      cone: '/Engine/BasicShapes/Cone',
-      plane: '/Engine/BasicShapes/Plane',
-      torus: '/Engine/BasicShapes/Torus'
-    };
-
-    const mappedClassPath = shapeMapping[lowerName] ?? this.resolveActorClass(className);
-
+    // Prepare location and rotation with defaults
     const [locX, locY, locZ] = ensureVector3(
       params.location ?? { x: 0, y: 0, z: 100 },
       'actor location'
@@ -38,8 +447,69 @@ export class ActorTools {
       params.rotation ?? { pitch: 0, yaw: 0, roll: 0 },
       'actor rotation'
     );
+    
+    const location = { x: locX, y: locY, z: locZ };
+    const rotation = { pitch: rotPitch, yaw: rotYaw, roll: rotRoll };
+    
+    // Try Direct RC first
+    try {
+      const result = await this.spawnViaDirectRC({
+        classPath: className,
+        location,
+        rotation,
+        actorName: sanitizedActorName
+      });
+      return result;
+    } catch (directRcError: any) {
+      log.debug(`Direct RC spawn failed, falling back to Python: ${directRcError?.message}`);
+      
+      // Fall back to Python-based spawning
+      try {
+        const pythonResult = await this.spawnViaPython({
+          classPath: className,
+          location,
+          rotation,
+          actorName: sanitizedActorName
+        });
+        
+        return {
+          ...pythonResult,
+          pythonFallbackUsed: true,
+          spawnMethod: 'Python',
+          warnings: [
+            ...(pythonResult.warnings || []),
+            `Direct RC spawn failed (${directRcError?.message}), used Python fallback`
+          ]
+        };
+      } catch (pythonError: any) {
+        throw new Error(`Failed to spawn actor: Direct RC error: ${directRcError?.message}. Python fallback error: ${pythonError?.message}`);
+      }
+    }
+  }
 
-  const escapedResolvedClassPath = escapePythonString(mappedClassPath);
+  /**
+   * Spawn actor using Python (fallback method - existing logic)
+   */
+  private async spawnViaPython(params: {
+    classPath: string;
+    location: { x: number; y: number; z: number };
+    rotation: { pitch: number; yaw: number; roll: number };
+    actorName?: string;
+  }): Promise<SpawnResult> {
+    const { classPath: className, location, rotation, actorName: sanitizedActorName } = params;
+    const lowerName = className.toLowerCase();
+    
+    const mappedClassPath = SHAPE_MAPPING[lowerName] ?? this.resolveActorClass(className);
+
+    // Use the already-validated location and rotation from params
+    const locX = location.x;
+    const locY = location.y;
+    const locZ = location.z;
+    const rotPitch = rotation.pitch;
+    const rotYaw = rotation.yaw;
+    const rotRoll = rotation.roll;
+
+    const escapedResolvedClassPath = escapePythonString(mappedClassPath);
   const escapedRequestedPath = escapePythonString(className);
   const escapedRequestedActorName = sanitizedActorName ? escapePythonString(sanitizedActorName) : '';
 
@@ -247,7 +717,7 @@ print('RESULT:' + json.dumps(finalize()))
       const locationVector = coerceVector3(interpreted.payload.location) ?? [locX, locY, locZ];
       const rotationVector = coerceVector3(interpreted.payload.rotation) ?? [rotPitch, rotYaw, rotRoll];
 
-      const result: Record<string, unknown> = {
+      const result: SpawnResult = {
         success: true,
         message: interpreted.message,
         actorName: actorName ?? undefined,
@@ -351,36 +821,9 @@ def spawn_actor_from_class(actor_class, location, rotation):
   }
 
   private resolveActorClass(classPath: string): string {
-    // Map common names to full Unreal class paths
-    const classMap: { [key: string]: string } = {
-      'PointLight': '/Script/Engine.PointLight',
-      'DirectionalLight': '/Script/Engine.DirectionalLight',
-      'SpotLight': '/Script/Engine.SpotLight',
-      'RectLight': '/Script/Engine.RectLight',
-      'SkyLight': '/Script/Engine.SkyLight',
-      'StaticMeshActor': '/Script/Engine.StaticMeshActor',
-      'PlayerStart': '/Script/Engine.PlayerStart',
-      'Camera': '/Script/Engine.CameraActor',
-      'CameraActor': '/Script/Engine.CameraActor',
-      'Pawn': '/Script/Engine.DefaultPawn',
-      'Character': '/Script/Engine.Character',
-      'TriggerBox': '/Script/Engine.TriggerBox',
-      'TriggerSphere': '/Script/Engine.TriggerSphere',
-      'BlockingVolume': '/Script/Engine.BlockingVolume',
-      'PostProcessVolume': '/Script/Engine.PostProcessVolume',
-      'LightmassImportanceVolume': '/Script/Engine.LightmassImportanceVolume',
-      'NavMeshBoundsVolume': '/Script/Engine.NavMeshBoundsVolume',
-      'ExponentialHeightFog': '/Script/Engine.ExponentialHeightFog',
-      'AtmosphericFog': '/Script/Engine.AtmosphericFog',
-      'SphereReflectionCapture': '/Script/Engine.SphereReflectionCapture',
-      'BoxReflectionCapture': '/Script/Engine.BoxReflectionCapture',
-      // PlaneReflectionCapture is abstract and cannot be spawned
-      'DecalActor': '/Script/Engine.DecalActor'
-    };
-    
     // Check if it's a simple name that needs mapping
-    if (classMap[classPath]) {
-      return classMap[classPath];
+    if (CLASS_MAP[classPath]) {
+      return CLASS_MAP[classPath];
     }
     
     // Check if it already looks like a full path
@@ -432,5 +875,284 @@ def spawn_actor_from_class(actor_class, location, rotation):
 
     // Fallback: return input unchanged
     return input;
+  }
+
+  /**
+   * Transform an existing actor (move/rotate/scale)
+   */
+  async transform(params: {
+    actorName: string;
+    location?: { x: number; y: number; z: number };
+    rotation?: { pitch: number; yaw: number; roll: number };
+    scale?: { x: number; y: number; z: number };
+  }): Promise<TransformResult> {
+    if (!params.actorName?.trim()) {
+      throw new Error('actorName is required for transform');
+    }
+
+    const escapedName = escapePythonString(params.actorName.trim());
+    const hasLocation = params.location !== undefined;
+    const hasRotation = params.rotation !== undefined;
+    const hasScale = params.scale !== undefined;
+
+    if (!hasLocation && !hasRotation && !hasScale) {
+      throw new Error('At least one of location, rotation, or scale must be provided');
+    }
+
+    const pythonCmd = `
+import unreal
+import json
+
+result = {"success": False, "message": "", "error": ""}
+actor_name = "${escapedName}"
+
+try:
+    subsys = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
+    if not subsys:
+        result["error"] = "EditorActorSubsystem not available"
+    else:
+        actors = subsys.get_all_level_actors()
+        target = None
+        actor_name_lower = actor_name.lower()
+        
+        for actor in actors:
+            if not actor:
+                continue
+            try:
+                label = actor.get_actor_label()
+                name = actor.get_name()
+                if label.lower() == actor_name_lower or name.lower() == actor_name_lower or label.lower().startswith(actor_name_lower + "_"):
+                    target = actor
+                    break
+            except:
+                continue
+        
+        if not target:
+            result["error"] = f"Actor not found: {actor_name}"
+        else:
+            ${hasLocation ? `
+            new_loc = unreal.Vector(${params.location!.x}, ${params.location!.y}, ${params.location!.z})
+            target.set_actor_location(new_loc, False, False)
+            result["location"] = [${params.location!.x}, ${params.location!.y}, ${params.location!.z}]
+            ` : ''}
+            
+            ${hasRotation ? `
+            new_rot = unreal.Rotator(${params.rotation!.pitch}, ${params.rotation!.yaw}, ${params.rotation!.roll})
+            target.set_actor_rotation(new_rot, False)
+            result["rotation"] = [${params.rotation!.pitch}, ${params.rotation!.yaw}, ${params.rotation!.roll}]
+            ` : ''}
+            
+            ${hasScale ? `
+            new_scale = unreal.Vector(${params.scale!.x}, ${params.scale!.y}, ${params.scale!.z})
+            target.set_actor_scale3d(new_scale)
+            result["scale"] = [${params.scale!.x}, ${params.scale!.y}, ${params.scale!.z}]
+            ` : ''}
+            
+            result["success"] = True
+            result["actorName"] = target.get_actor_label()
+            result["message"] = f"Transformed {target.get_actor_label()}"
+            
+except Exception as e:
+    result["error"] = str(e)
+
+print('RESULT:' + json.dumps(result))
+`.trim();
+
+    const response = await this.bridge.executePython(pythonCmd);
+    const interpreted = interpretStandardResult(response, {
+      successMessage: `Transformed actor ${params.actorName}`,
+      failureMessage: `Failed to transform actor ${params.actorName}`
+    });
+
+    if (!interpreted.success) {
+      throw new Error(interpreted.error || interpreted.message);
+    }
+
+    const payload = interpreted.payload as any;
+    return {
+      success: true,
+      message: interpreted.message,
+      actorName: coerceString(payload.actorName) || params.actorName,
+      location: Array.isArray(payload.location) ? { x: payload.location[0], y: payload.location[1], z: payload.location[2] } : undefined,
+      rotation: Array.isArray(payload.rotation) ? { pitch: payload.rotation[0], yaw: payload.rotation[1], roll: payload.rotation[2] } : undefined,
+      scale: Array.isArray(payload.scale) ? { x: payload.scale[0], y: payload.scale[1], z: payload.scale[2] } : undefined,
+      method: 'Python'
+    };
+  }
+
+  /**
+   * Spawn multiple actors in a batch (grid, line, or custom positions)
+   */
+  async batchSpawn(params: {
+    classPath: string;
+    count?: number;
+    positions?: Array<{ x: number; y: number; z: number }>;
+    gridSize?: { rows: number; cols: number };
+    spacing?: number;
+    startLocation?: { x: number; y: number; z: number };
+    namePrefix?: string;
+  }): Promise<BatchSpawnResult> {
+    const classPath = params.classPath?.trim();
+    if (!classPath) {
+      throw new Error('classPath is required for batch spawn');
+    }
+
+    const positions: Array<{ x: number; y: number; z: number }> = [];
+    const startLoc = params.startLocation || { x: 0, y: 0, z: 100 };
+    const spacing = params.spacing || 200;
+
+    // Generate positions based on params
+    if (params.positions && params.positions.length > 0) {
+      positions.push(...params.positions);
+    } else if (params.gridSize) {
+      // Grid layout
+      for (let row = 0; row < params.gridSize.rows; row++) {
+        for (let col = 0; col < params.gridSize.cols; col++) {
+          positions.push({
+            x: startLoc.x + col * spacing,
+            y: startLoc.y + row * spacing,
+            z: startLoc.z
+          });
+        }
+      }
+    } else if (params.count && params.count > 0) {
+      // Line layout
+      for (let i = 0; i < params.count; i++) {
+        positions.push({
+          x: startLoc.x + i * spacing,
+          y: startLoc.y,
+          z: startLoc.z
+        });
+      }
+    } else {
+      throw new Error('Provide positions, gridSize, or count for batch spawn');
+    }
+
+    const spawned: Array<{ name: string; location: { x: number; y: number; z: number } }> = [];
+    const errors: string[] = [];
+    const namePrefix = params.namePrefix || classPath.split('/').pop()?.replace('.', '_') || 'Actor';
+
+    for (let i = 0; i < positions.length; i++) {
+      try {
+        const result = await this.spawn({
+          classPath,
+          location: positions[i],
+          actorName: `${namePrefix}_${i}`
+        });
+        if (result.success) {
+          spawned.push({
+            name: result.actorName || `${namePrefix}_${i}`,
+            location: positions[i]
+          });
+        } else {
+          errors.push(`Position ${i}: ${result.message}`);
+        }
+      } catch (err: any) {
+        errors.push(`Position ${i}: ${err.message || err}`);
+      }
+    }
+
+    return {
+      success: spawned.length > 0,
+      message: `Spawned ${spawned.length}/${positions.length} actors`,
+      spawned,
+      count: spawned.length,
+      errors: errors.length > 0 ? errors : undefined
+    };
+  }
+
+  /**
+   * Set material on an actor's mesh component
+   */
+  async setMaterial(params: {
+    actorName: string;
+    materialPath: string;
+    slotIndex?: number;
+  }): Promise<SetMaterialResult> {
+    if (!params.actorName?.trim()) {
+      throw new Error('actorName is required');
+    }
+    if (!params.materialPath?.trim()) {
+      throw new Error('materialPath is required');
+    }
+
+    const escapedActorName = escapePythonString(params.actorName.trim());
+    const escapedMaterialPath = escapePythonString(params.materialPath.trim());
+    const slotIndex = params.slotIndex ?? 0;
+
+    const pythonCmd = `
+import unreal
+import json
+
+result = {"success": False, "message": "", "error": ""}
+actor_name = "${escapedActorName}"
+material_path = "${escapedMaterialPath}"
+
+try:
+    subsys = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
+    if not subsys:
+        result["error"] = "EditorActorSubsystem not available"
+    else:
+        # Find the actor
+        actors = subsys.get_all_level_actors()
+        target = None
+        actor_name_lower = actor_name.lower()
+        
+        for actor in actors:
+            if not actor:
+                continue
+            try:
+                label = actor.get_actor_label()
+                name = actor.get_name()
+                if label.lower() == actor_name_lower or name.lower() == actor_name_lower:
+                    target = actor
+                    break
+            except:
+                continue
+        
+        if not target:
+            result["error"] = f"Actor not found: {actor_name}"
+        else:
+            # Load the material
+            material = unreal.EditorAssetLibrary.load_asset(material_path)
+            if not material:
+                result["error"] = f"Material not found: {material_path}"
+            else:
+                # Find mesh component
+                mesh_comp = target.get_component_by_class(unreal.StaticMeshComponent)
+                if not mesh_comp:
+                    mesh_comp = target.get_component_by_class(unreal.SkeletalMeshComponent)
+                
+                if not mesh_comp:
+                    result["error"] = "Actor has no mesh component"
+                else:
+                    mesh_comp.set_material(${slotIndex}, material)
+                    result["success"] = True
+                    result["actorName"] = target.get_actor_label()
+                    result["materialPath"] = material_path
+                    result["message"] = f"Applied material to {target.get_actor_label()}"
+                    
+except Exception as e:
+    result["error"] = str(e)
+
+print('RESULT:' + json.dumps(result))
+`.trim();
+
+    const response = await this.bridge.executePython(pythonCmd);
+    const interpreted = interpretStandardResult(response, {
+      successMessage: `Applied material to ${params.actorName}`,
+      failureMessage: `Failed to apply material to ${params.actorName}`
+    });
+
+    if (!interpreted.success) {
+      throw new Error(interpreted.error || interpreted.message);
+    }
+
+    return {
+      success: true,
+      message: interpreted.message,
+      actorName: coerceString(interpreted.payload.actorName) || params.actorName,
+      materialPath: params.materialPath
+    };
   }
 }

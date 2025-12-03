@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![NPM Package](https://img.shields.io/npm/v/unreal-engine-mcp-server)](https://www.npmjs.com/package/unreal-engine-mcp-server)
 [![MCP SDK](https://img.shields.io/badge/MCP%20SDK-TypeScript-blue)](https://github.com/modelcontextprotocol/sdk)
-[![Unreal Engine](https://img.shields.io/badge/Unreal%20Engine-5.0--5.6-orange)](https://www.unrealengine.com/)
+[![Unreal Engine](https://img.shields.io/badge/Unreal%20Engine-5.0--5.7-orange)](https://www.unrealengine.com/)
 [![MCP Registry](https://img.shields.io/badge/MCP%20Registry-Published-green)](https://registry.modelcontextprotocol.io/)
 
 A comprehensive Model Context Protocol (MCP) server that enables AI assistants to control Unreal Engine via Remote Control API. Built with TypeScript and designed for game development automation.
@@ -24,7 +24,7 @@ A comprehensive Model Context Protocol (MCP) server that enables AI assistants t
 
 ### Prerequisites
 - Node.js 18+
-- Unreal Engine 5.0-5.6
+- Unreal Engine 5.0-5.7
 - Required UE Plugins (enable via **Edit ▸ Plugins**):
   - **Remote Control API** – core Remote Control HTTP/WS endpoints
   - **Remote Control Web Interface** – enables WebSocket bridge used by this server
@@ -104,7 +104,7 @@ Then enable Python execution in: Edit > Project Settings > Plugins > Remote Cont
       "args": ["unreal-engine-mcp-server"],
       "env": {
         "UE_HOST": "127.0.0.1",
-        "UE_RC_HTTP_PORT": "30010",
+"UE_RC_HTTP_PORT": "30010",
         "UE_RC_WS_PORT": "30020",
         "UE_PROJECT_PATH": "C:/Users/YourName/Documents/Unreal Projects/YourProject"
       }
@@ -182,6 +182,8 @@ UE_RC_WS_PORT=30020            # Remote Control WebSocket port
 UE_PROJECT_PATH="C:/Users/YourName/Documents/Unreal Projects/YourProject"  # Absolute path to your .uproject file
 LOG_LEVEL=info                 # debug | info | warn | error
 ```
+
+> **Note**: Remote Control HTTP API uses port 30010 by default. Port 30000 is used by the Remote Control Web Interface (Conductor UI).
 
 ### Docker
 

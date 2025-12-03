@@ -2,6 +2,89 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.0] - 2025-12-01
+### Added - Phase 7 (Partial): Easy Wins - Data & Config
+
+#### New Tool: `manage_material` (Tool #20) - Material Instance Management
+- `create_instance`: Create Material Instance from parent material with parameters
+- `set_scalar`: Set scalar (float) parameter on Material Instance
+- `set_vector`: Set vector (color) parameter on Material Instance  
+- `set_texture`: Set texture parameter on Material Instance
+- `get_parameters`: Get all parameters from Material Instance
+- `copy`: Copy Material Instance with optional overrides
+
+#### New Tool: `manage_rendering` (Tool #21) - UE5 Rendering Control
+- `set_nanite` / `get_nanite`: Enable/disable Nanite on static meshes
+- `set_lumen` / `get_lumen`: Configure Lumen GI settings
+- `set_vsm`: Configure Virtual Shadow Maps
+- `set_anti_aliasing`: Set AA method (None/FXAA/TAA/TSR/MSAA)
+- `set_screen_percentage`: Set resolution scale (10-200%)
+- `set_ray_tracing`: Toggle RT features (GI, reflections, shadows, AO, translucency)
+- `get_info`: Get current rendering configuration
+- `set_post_process`: Configure PostProcessVolume settings
+
+#### New Tool: `manage_input` (Tool #22) - UE5 Enhanced Input System
+- `create_action`: Create InputAction assets with value types and triggers
+- `create_context`: Create InputMappingContext assets
+- `add_mapping`: Add key mapping to context
+- `get_mappings`: List mappings in context
+- `remove_mapping`: Remove mapping from context
+- `list_actions`: List all InputAction assets
+- `list_contexts`: List all InputMappingContext assets
+
+### Changed
+- Version bumped to 0.7.0
+- Tool count: 22 (up from 19)
+- Phase 7: 3/10 items complete (7.3 Rendering, 7.5 Input, 7.6 Materials)
+
+---
+
+## [0.6.0] - 2025-12-01
+### Added - Phase 6 Complete: C++ Workflow Foundation
+- **New Tool: `manage_cpp`** (Tool #19) - Full C++ class scaffolding for UE5 with 16 actions
+
+#### Class Management (6.1)
+- `create_class`: Generate .h and .cpp for 17 class types (Actor, Character, Pawn, Component, GAS, CommonUI, etc.)
+- `add_property`: Add UPROPERTY to existing classes with replication support
+- `add_function`: Add UFUNCTION with RPC support (Server, Client, NetMulticast)
+- `list_templates`: List all available class templates
+
+#### GAS Scaffolding (6.2)
+- `create_gas_playerstate`: Multiplayer-ready PlayerState with ASC (recommended pattern)
+- `create_gas_gamemode`: GameMode with `UAbilitySystemGlobals::Get().InitGlobalData()` initialization
+- `create_gameplay_effect`: GameplayEffect with duration, modifiers, and tags support
+- Templates: AttributeSet (ATTRIBUTE_ACCESSORS + replication), GameplayAbility (prediction), AbilitySystemComponent
+
+#### CommonUI Scaffolding (6.3)
+- `create_widget_stack_manager`: GameInstanceSubsystem for managing activatable widget stacks
+- `create_input_action_data_asset`: Input action data asset with gameplay tag support
+- Templates: ActivatableWidget, ButtonBase
+
+#### Data Assets (6.4)
+- `create_datatable_struct`: DataTable row struct (FTableRowBase) generation
+- `create_primary_data_asset`: PrimaryDataAsset with custom asset type registration
+
+#### Project Management (6.5)
+- `add_module_dependency`: Add dependencies to .Build.cs (public/private)
+- `get_module_dependencies`: Read current module dependencies
+- `create_module`: Create new Runtime/Editor modules with Build.cs and module files
+- `get_project_info`: Parse .uproject for modules, plugins, engine version
+- `enable_plugin`: Enable/disable plugins in .uproject
+
+### Templates (17 total)
+- **Core UE5**: Actor, Character, Pawn, PlayerController, GameMode, GameState, PlayerState, ActorComponent, SceneComponent, Widget, DataAsset, Subsystem
+- **GAS**: AttributeSet, GameplayAbility, AbilitySystemComponent
+- **CommonUI**: ActivatableWidget, ButtonBase
+
+### Design Principles
+- **C++ First Workflow**: Primary game logic in C++, Blueprints only for small tweaks
+- **Multiplayer by Default**: All generated code includes replication patterns (DOREPLIFETIME, ReplicatedUsing, Server RPCs with validation)
+- **ASC on PlayerState**: GAS classes follow the recommended multiplayer pattern (never on Character)
+
+### Changed
+- Version bumped to 0.6.0
+- TODO.md updated: Phase 6 marked complete (all 22 tasks)
+
 ## [0.4.7] - 2025-11-16
 ### Added
 - Output Log reading via `system_control` tool with `read_log` action. Supports filtering by category (comma-separated or array), log level (Error, Warning, Log, Verbose, VeryVerbose, All), line count (up to 2000), specific log path, include prefixes, and exclude categories. Automatically resolves the latest project log under Saved/Logs.

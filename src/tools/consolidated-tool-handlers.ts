@@ -1,131 +1,27 @@
-// Consolidated tool handlers - maps 13 tools to all 36 operations
-import { cleanObject } from '../utils/safe-json.js';
-import { Logger } from '../utils/logger.js';
+/**
+ * Consolidated Tool Handlers
+ * 
+ * Maps 23 MCP tools to their action handlers.
+ * Each tool has a numbered section with its action cases.
+ * 
+ * Structure:
+ * - 1-10: Core tools (assets, actors, editor, level, animation, effects, blueprint, environment, system, console)
+ * - 11-15: Data tools (RC presets, sequence, introspection, query, selection)
+ * - 16-18: Lifecycle tools (debug, editor lifecycle, project build)
+ * - 19-23: Phase 6-7 tools (input, rendering, material, cpp, collision)
+ */
 
-const log = new Logger('ConsolidatedToolHandler');
-
-const ACTION_REQUIRED_ERROR = 'Missing required parameter: action';
-
-function ensureArgsPresent(args: any) {
-  if (args === null || args === undefined) {
-    throw new Error('Invalid arguments: null or undefined');
-  }
-}
-
-function requireAction(args: any): string {
-  ensureArgsPresent(args);
-  const action = args.action;
-  if (typeof action !== 'string' || action.trim() === '') {
-    throw new Error(ACTION_REQUIRED_ERROR);
-  }
-  return action;
-}
-
-function requireNonEmptyString(value: any, field: string, message?: string): string {
-  if (typeof value !== 'string' || value.trim() === '') {
-    throw new Error(message ?? `Invalid ${field}: must be a non-empty string`);
-  }
-  return value;
-}
-
-function requirePositiveNumber(value: any, field: string, message?: string): number {
-  if (typeof value !== 'number' || !isFinite(value) || value <= 0) {
-    throw new Error(message ?? `Invalid ${field}: must be a positive number`);
-  }
-  return value;
-}
-
-function requireVector3Components(
-  vector: any,
-  message: string
-): [number, number, number] {
-  if (
-    !vector ||
-    typeof vector.x !== 'number' ||
-    typeof vector.y !== 'number' ||
-    typeof vector.z !== 'number'
-  ) {
-    throw new Error(message);
-  }
-  return [vector.x, vector.y, vector.z];
-}
-
-function getElicitationTimeoutMs(tools: any): number | undefined {
-  if (!tools) return undefined;
-  const direct = tools.elicitationTimeoutMs;
-  if (typeof direct === 'number' && Number.isFinite(direct)) {
-    return direct;
-  }
-  if (typeof tools.getElicitationTimeoutMs === 'function') {
-    const value = tools.getElicitationTimeoutMs();
-    if (typeof value === 'number' && Number.isFinite(value)) {
-      return value;
-    }
-  }
-  return undefined;
-}
-
-async function elicitMissingPrimitiveArgs(
-  tools: any,
-  args: any,
-  prompt: string,
-  fieldSchemas: Record<string, { type: 'string' | 'number' | 'integer' | 'boolean'; title?: string; description?: string; enum?: string[]; enumNames?: string[]; minimum?: number; maximum?: number; minLength?: number; maxLength?: number; pattern?: string; format?: string; default?: unknown }>
-) {
-  if (
-    !tools ||
-    typeof tools.supportsElicitation !== 'function' ||
-    !tools.supportsElicitation() ||
-    typeof tools.elicit !== 'function'
-  ) {
-    return;
-  }
-
-  const properties: Record<string, any> = {};
-  const required: string[] = [];
-
-  for (const [key, schema] of Object.entries(fieldSchemas)) {
-    const value = args?.[key];
-    const missing =
-      value === undefined ||
-      value === null ||
-      (typeof value === 'string' && value.trim() === '');
-    if (missing) {
-      properties[key] = schema;
-      required.push(key);
-    }
-  }
-
-  if (required.length === 0) return;
-
-  const timeoutMs = getElicitationTimeoutMs(tools);
-  const options: any = {
-    fallback: async () => ({ ok: false, error: 'missing-params' })
-  };
-  if (typeof timeoutMs === 'number') {
-    options.timeoutMs = timeoutMs;
-  }
-
-  try {
-    const elicited = await tools.elicit(
-      prompt,
-      { type: 'object', properties, required },
-      options
-    );
-
-    if (elicited?.ok && elicited.value) {
-      for (const key of required) {
-        const value = elicited.value[key];
-        if (value === undefined || value === null) continue;
-        args[key] = typeof value === 'string' ? value.trim() : value;
-      }
-    }
-  } catch (err) {
-    log.debug('Special elicitation fallback skipped', {
-      prompt,
-      err: (err as any)?.message || String(err)
-    });
-  }
-}
+import {
+  log,
+  ensureArgsPresent,
+  requireAction,
+  requireNonEmptyString,
+  requirePositiveNumber,
+  requireVector3Components,
+  elicitMissingPrimitiveArgs,
+  getElicitationTimeoutMs,
+  cleanObject
+} from './handlers/handler-utils.js';
 
 export async function handleConsolidatedToolCall(
   name: string,
@@ -278,7 +174,82 @@ export async function handleConsolidatedToolCall(
               ? args.actorName
               : (typeof args.name === 'string' ? args.name : undefined);
             const actorName = requireNonEmptyString(actorNameArg, 'actorName', 'Invalid actorName');
-            const res = await tools.bridge.executeEditorFunction('DELETE_ACTOR', { actor_name: actorName });
+            // Use ActorTools.delete() which tries Direct RC first, then Python fallback
+            const res = await tools.actorTools.delete(actorName);
+            return cleanObject(res);
+          }
+          case 'transform': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Which actor should control_actor.transform modify?',
+              {
+                actorName: {
+                  type: 'string',
+                  title: 'Actor Name',
+                  description: 'Exact label of the actor to transform'
+                }
+              }
+            );
+            const actorName = requireNonEmptyString(args.actorName, 'actorName', 'Invalid actorName');
+            const res = await tools.actorTools.transform({
+              actorName,
+              location: args.location,
+              rotation: args.rotation,
+              scale: args.scale
+            });
+            return cleanObject(res);
+          }
+          case 'batch_spawn': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide the class path for control_actor.batch_spawn',
+              {
+                classPath: {
+                  type: 'string',
+                  title: 'Actor Class or Asset Path',
+                  description: 'Class name or asset path to spawn multiple instances of'
+                }
+              }
+            );
+            const classPath = requireNonEmptyString(args.classPath, 'classPath', 'Invalid classPath');
+            const res = await tools.actorTools.batchSpawn({
+              classPath,
+              count: args.count,
+              positions: args.positions,
+              gridSize: args.gridSize,
+              spacing: args.spacing,
+              startLocation: args.startLocation,
+              namePrefix: args.namePrefix
+            });
+            return cleanObject(res);
+          }
+          case 'set_material': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide actor and material for control_actor.set_material',
+              {
+                actorName: {
+                  type: 'string',
+                  title: 'Actor Name',
+                  description: 'Actor to apply material to'
+                },
+                materialPath: {
+                  type: 'string',
+                  title: 'Material Path',
+                  description: 'Content path to material asset'
+                }
+              }
+            );
+            const actorName = requireNonEmptyString(args.actorName, 'actorName', 'Invalid actorName');
+            const materialPath = requireNonEmptyString(args.materialPath, 'materialPath', 'Invalid materialPath');
+            const res = await tools.actorTools.setMaterial({
+              actorName,
+              materialPath,
+              slotIndex: args.slotIndex
+            });
             return cleanObject(res);
           }
           case 'apply_force': {
@@ -1138,6 +1109,74 @@ case 'console_command':
             case 'set_playback_speed':
               if (args.speed === undefined) throw new Error('Missing required parameter: speed');
               return await sequenceTools.setPlaybackSpeed({ speed: args.speed });
+            case 'add_transform_keyframe':
+              if (!args.bindingName) throw new Error('Missing required parameter: bindingName');
+              if (args.frame === undefined) throw new Error('Missing required parameter: frame');
+              return await sequenceTools.addTransformKeyframe({
+                bindingName: args.bindingName,
+                frame: args.frame,
+                location: args.location,
+                rotation: args.rotation,
+                scale: args.scale,
+                interpolation: args.interpolation
+              });
+            case 'add_camera_cut_track':
+              return await sequenceTools.addCameraCutTrack({ path: args.path });
+            case 'add_camera_cut':
+              if (!args.cameraBindingName) throw new Error('Missing required parameter: cameraBindingName');
+              if (args.startFrame === undefined) throw new Error('Missing required parameter: startFrame');
+              return await sequenceTools.addCameraCut({
+                cameraBindingName: args.cameraBindingName,
+                startFrame: args.startFrame,
+                endFrame: args.endFrame
+              });
+            case 'get_tracks':
+              if (!args.bindingName) throw new Error('Missing required parameter: bindingName');
+              return await sequenceTools.getTracks({ bindingName: args.bindingName });
+            // Phase 7.8: Property Tracks
+            case 'add_property_track':
+              if (!args.bindingName) throw new Error('Missing required parameter: bindingName');
+              if (!args.propertyPath) throw new Error('Missing required parameter: propertyPath');
+              return await sequenceTools.addPropertyTrack({
+                bindingName: args.bindingName,
+                propertyPath: args.propertyPath,
+                propertyType: args.propertyType
+              });
+            case 'add_property_keyframe':
+              if (!args.bindingName) throw new Error('Missing required parameter: bindingName');
+              if (!args.propertyPath) throw new Error('Missing required parameter: propertyPath');
+              if (args.frame === undefined) throw new Error('Missing required parameter: frame');
+              if (args.value === undefined) throw new Error('Missing required parameter: value');
+              return await sequenceTools.addPropertyKeyframe({
+                bindingName: args.bindingName,
+                propertyPath: args.propertyPath,
+                frame: args.frame,
+                value: args.value
+              });
+            // Phase 7.9: Audio Tracks
+            case 'add_audio_track':
+              if (!args.soundPath) throw new Error('Missing required parameter: soundPath');
+              return await sequenceTools.addAudioTrack({
+                soundPath: args.soundPath,
+                startFrame: args.startFrame,
+                rowIndex: args.rowIndex
+              });
+            // Phase 7.10: Event Tracks
+            case 'add_event_track':
+              if (!args.eventName) throw new Error('Missing required parameter: eventName');
+              return await sequenceTools.addEventTrack({
+                bindingName: args.bindingName,
+                eventName: args.eventName
+              });
+            case 'add_event_key':
+              if (!args.eventName) throw new Error('Missing required parameter: eventName');
+              if (args.frame === undefined) throw new Error('Missing required parameter: frame');
+              return await sequenceTools.addEventKey({
+                eventName: args.eventName,
+                frame: args.frame,
+                functionName: args.functionName,
+                bindingName: args.bindingName
+              });
             default:
               throw new Error(`Unknown sequence action: ${action}`);
           }
@@ -1161,7 +1200,1052 @@ case 'inspect':
           default:
             throw new Error(`Unknown inspect action: ${inspectAction}`);
         }
-        
+
+      // 14. QUERY LEVEL - Actor queries
+      case 'query_level':
+        switch (requireAction(args)) {
+          case 'get_all': {
+            const res = await tools.queryLevelTools.getAllActors({
+              includeHidden: args.includeHidden,
+              limit: args.limit,
+              offset: args.offset
+            });
+            return cleanObject(res);
+          }
+          case 'get_selected': {
+            const res = await tools.queryLevelTools.getSelectedActors();
+            return cleanObject(res);
+          }
+          case 'get_by_class': {
+            if (!args.className) throw new Error('Missing required parameter: className');
+            const res = await tools.queryLevelTools.getActorsByClass(args.className, {
+              includeHidden: args.includeHidden,
+              limit: args.limit
+            });
+            return cleanObject(res);
+          }
+          case 'get_by_tag': {
+            if (!args.tag) throw new Error('Missing required parameter: tag');
+            const res = await tools.queryLevelTools.getActorsByTag(args.tag, {
+              includeHidden: args.includeHidden,
+              limit: args.limit
+            });
+            return cleanObject(res);
+          }
+          case 'get_by_name': {
+            if (!args.namePattern) throw new Error('Missing required parameter: namePattern');
+            const res = await tools.queryLevelTools.getActorsByName(args.namePattern, {
+              includeHidden: args.includeHidden,
+              limit: args.limit
+            });
+            return cleanObject(res);
+          }
+          case 'count': {
+            const res = await tools.queryLevelTools.countActors();
+            return cleanObject(res);
+          }
+          default:
+            throw new Error(`Unknown query_level action: ${args.action}`);
+        }
+
+      // 15. MANAGE SELECTION - Editor selection control
+      case 'manage_selection':
+        switch (requireAction(args)) {
+          case 'select': {
+            const res = await tools.manageSelectionTools.selectActors({
+              actorNames: args.actorNames,
+              actorPaths: args.actorPaths,
+              additive: args.additive
+            });
+            return cleanObject(res);
+          }
+          case 'deselect': {
+            const res = await tools.manageSelectionTools.deselectActors({
+              actorNames: args.actorNames,
+              actorPaths: args.actorPaths
+            });
+            return cleanObject(res);
+          }
+          case 'clear': {
+            const res = await tools.manageSelectionTools.clearSelection();
+            return cleanObject(res);
+          }
+          case 'select_all_of_class': {
+            if (!args.className) throw new Error('Missing required parameter: className');
+            const res = await tools.manageSelectionTools.selectAllOfClass(args.className, args.additive);
+            return cleanObject(res);
+          }
+          case 'invert': {
+            const res = await tools.manageSelectionTools.invertSelection();
+            return cleanObject(res);
+          }
+          case 'get': {
+            const res = await tools.manageSelectionTools.getSelection();
+            return cleanObject(res);
+          }
+          default:
+            throw new Error(`Unknown manage_selection action: ${args.action}`);
+        }
+
+      // 16. DEBUG TOOLS EXTENDED - Enhanced debugging
+      case 'debug_extended':
+        switch (requireAction(args)) {
+          case 'get_log': {
+            const res = await tools.debugToolsExtended.getLogs({
+              lines: args.lines,
+              category: args.category,
+              severity: args.severity,
+              search: args.search
+            });
+            return cleanObject(res);
+          }
+          case 'get_errors': {
+            const res = await tools.debugToolsExtended.getErrors(args.lines);
+            return cleanObject(res);
+          }
+          case 'get_warnings': {
+            const res = await tools.debugToolsExtended.getWarnings(args.lines);
+            return cleanObject(res);
+          }
+          case 'start_watch': {
+            const res = await tools.debugToolsExtended.startErrorWatch(args.watchInterval);
+            return cleanObject(res);
+          }
+          case 'stop_watch': {
+            const res = tools.debugToolsExtended.stopErrorWatch();
+            return cleanObject(res);
+          }
+          case 'get_watched_errors': {
+            const res = tools.debugToolsExtended.getRecentWatchedErrors();
+            return cleanObject(res);
+          }
+          case 'clear_errors': {
+            const res = tools.debugToolsExtended.clearRecentErrors();
+            return cleanObject(res);
+          }
+          case 'check_connection': {
+            const res = await tools.debugToolsExtended.checkConnection();
+            return cleanObject(res);
+          }
+          default:
+            throw new Error(`Unknown debug_extended action: ${args.action}`);
+        }
+
+      // 17. EDITOR LIFECYCLE - Save, reload, hot-reload
+      case 'editor_lifecycle':
+        switch (requireAction(args)) {
+          case 'save_level': {
+            const res = await tools.editorLifecycleTools.saveCurrentLevel();
+            return cleanObject(res);
+          }
+          case 'save_all': {
+            const res = await tools.editorLifecycleTools.saveAllDirtyAssets();
+            return cleanObject(res);
+          }
+          case 'get_dirty': {
+            const res = await tools.editorLifecycleTools.getDirtyAssets();
+            return cleanObject(res);
+          }
+          case 'hot_reload': {
+            const res = await tools.editorLifecycleTools.hotReloadBlueprints();
+            return cleanObject(res);
+          }
+          case 'compile_blueprint': {
+            if (!args.blueprintPath) throw new Error('Missing required parameter: blueprintPath');
+            const res = await tools.editorLifecycleTools.compileBlueprint(args.blueprintPath);
+            return cleanObject(res);
+          }
+          case 'restart_pie': {
+            const res = await tools.editorLifecycleTools.restartPIE();
+            return cleanObject(res);
+          }
+          case 'load_level': {
+            if (!args.levelPath) throw new Error('Missing required parameter: levelPath');
+            const res = await tools.editorLifecycleTools.loadLevel(args.levelPath, args.streaming);
+            return cleanObject(res);
+          }
+          case 'create_level': {
+            if (!args.levelName) throw new Error('Missing required parameter: levelName');
+            const res = await tools.editorLifecycleTools.createNewLevel(args.levelName, args.templatePath);
+            return cleanObject(res);
+          }
+          case 'get_state': {
+            const res = await tools.editorLifecycleTools.getEditorState();
+            return cleanObject(res);
+          }
+          case 'refresh_assets': {
+            const res = await tools.editorLifecycleTools.refreshAssets();
+            return cleanObject(res);
+          }
+          case 'force_gc': {
+            const res = await tools.editorLifecycleTools.forceGarbageCollection();
+            return cleanObject(res);
+          }
+          default:
+            throw new Error(`Unknown editor_lifecycle action: ${args.action}`);
+        }
+
+      // 18. PROJECT BUILD - Packaging and build operations
+      case 'project_build':
+        switch (requireAction(args)) {
+          case 'validate': {
+            const res = await tools.projectBuildTools.validateForPackaging();
+            return cleanObject(res);
+          }
+          case 'cook': {
+            const res = await tools.projectBuildTools.cookContent();
+            return cleanObject(res);
+          }
+          case 'package': {
+            const res = await tools.projectBuildTools.packageGame({
+              configuration: args.configuration,
+              outputDir: args.outputDir,
+              compressed: args.compressed,
+              forDistribution: args.forDistribution
+            });
+            return cleanObject(res);
+          }
+          case 'build_lighting': {
+            const res = await tools.projectBuildTools.buildLighting(args.quality);
+            return cleanObject(res);
+          }
+          case 'build_navigation': {
+            const res = await tools.projectBuildTools.buildNavigation();
+            return cleanObject(res);
+          }
+          case 'build_all': {
+            const res = await tools.projectBuildTools.buildAll();
+            return cleanObject(res);
+          }
+          case 'open_packaged': {
+            const res = await tools.projectBuildTools.openPackagedFolder();
+            return cleanObject(res);
+          }
+          default:
+            throw new Error(`Unknown project_build action: ${args.action}`);
+        }
+
+      // 19. ENHANCED INPUT - Phase 7.5
+      case 'manage_input':
+        switch (requireAction(args)) {
+          case 'create_action': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide details for manage_input.create_action',
+              {
+                name: {
+                  type: 'string',
+                  title: 'Action Name',
+                  description: 'Name for the Input Action asset'
+                }
+              }
+            );
+            const name = requireNonEmptyString(args.name, 'name', 'Missing required parameter: name');
+            const res = await tools.inputTools.createInputAction({
+              name,
+              savePath: args.savePath,
+              valueType: args.valueType,
+              triggers: args.triggers,
+              consumeInput: args.consumeInput
+            });
+            return cleanObject(res);
+          }
+          case 'create_context': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide details for manage_input.create_context',
+              {
+                name: {
+                  type: 'string',
+                  title: 'Context Name',
+                  description: 'Name for the Input Mapping Context asset'
+                }
+              }
+            );
+            const name = requireNonEmptyString(args.name, 'name', 'Missing required parameter: name');
+            const res = await tools.inputTools.createInputMappingContext({
+              name,
+              savePath: args.savePath,
+              priority: args.priority
+            });
+            return cleanObject(res);
+          }
+          case 'add_mapping': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide details for manage_input.add_mapping',
+              {
+                contextPath: {
+                  type: 'string',
+                  title: 'Context Path',
+                  description: 'Content path to the Input Mapping Context'
+                },
+                actionPath: {
+                  type: 'string',
+                  title: 'Action Path',
+                  description: 'Content path to the Input Action'
+                },
+                key: {
+                  type: 'string',
+                  title: 'Key',
+                  description: 'Key name (e.g., "W", "SpaceBar")'
+                }
+              }
+            );
+            const contextPath = requireNonEmptyString(args.contextPath, 'contextPath', 'Missing required parameter: contextPath');
+            const actionPath = requireNonEmptyString(args.actionPath, 'actionPath', 'Missing required parameter: actionPath');
+            const key = requireNonEmptyString(args.key, 'key', 'Missing required parameter: key');
+            const res = await tools.inputTools.addMapping({
+              contextPath,
+              actionPath,
+              key,
+              modifiers: args.modifiers
+            });
+            return cleanObject(res);
+          }
+          case 'get_mappings': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide the context path for manage_input.get_mappings',
+              {
+                contextPath: {
+                  type: 'string',
+                  title: 'Context Path',
+                  description: 'Content path to the Input Mapping Context'
+                }
+              }
+            );
+            const contextPath = requireNonEmptyString(args.contextPath, 'contextPath', 'Missing required parameter: contextPath');
+            const res = await tools.inputTools.getMappings({ contextPath });
+            return cleanObject(res);
+          }
+          case 'remove_mapping': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide details for manage_input.remove_mapping',
+              {
+                contextPath: {
+                  type: 'string',
+                  title: 'Context Path',
+                  description: 'Content path to the Input Mapping Context'
+                },
+                key: {
+                  type: 'string',
+                  title: 'Key',
+                  description: 'Key name to remove'
+                }
+              }
+            );
+            const contextPath = requireNonEmptyString(args.contextPath, 'contextPath', 'Missing required parameter: contextPath');
+            const key = requireNonEmptyString(args.key, 'key', 'Missing required parameter: key');
+            const res = await tools.inputTools.removeMapping({
+              contextPath,
+              key,
+              actionPath: args.actionPath
+            });
+            return cleanObject(res);
+          }
+          case 'list_actions': {
+            const res = await tools.inputTools.listInputActions({
+              directory: args.directory
+            });
+            return cleanObject(res);
+          }
+          case 'list_contexts': {
+            const res = await tools.inputTools.listInputMappingContexts({
+              directory: args.directory
+            });
+            return cleanObject(res);
+          }
+          default:
+            throw new Error(`Unknown manage_input action: ${args.action}`);
+        }
+
+      // 20. RENDERING SETTINGS (Phase 7.3)
+      case 'manage_rendering':
+        switch (requireAction(args)) {
+          case 'set_nanite': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide details for manage_rendering.set_nanite',
+              {
+                meshPath: {
+                  type: 'string',
+                  title: 'Mesh Path',
+                  description: 'Content path to the static mesh'
+                }
+              }
+            );
+            const meshPath = requireNonEmptyString(args.meshPath, 'meshPath', 'Missing required parameter: meshPath');
+            const enabled = args.enabled !== false; // Default true
+            const res = await tools.renderingTools.setNaniteEnabled({ meshPath, enabled });
+            return cleanObject(res);
+          }
+          case 'get_nanite': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide the mesh path for manage_rendering.get_nanite',
+              {
+                meshPath: {
+                  type: 'string',
+                  title: 'Mesh Path',
+                  description: 'Content path to the static mesh'
+                }
+              }
+            );
+            const meshPath = requireNonEmptyString(args.meshPath, 'meshPath', 'Missing required parameter: meshPath');
+            const res = await tools.renderingTools.getNaniteStatus({ meshPath });
+            return cleanObject(res);
+          }
+          case 'set_lumen': {
+            const res = await tools.renderingTools.setLumenSettings({
+              method: args.method,
+              quality: args.quality,
+              finalGatherQuality: args.finalGatherQuality,
+              reflectionsEnabled: args.reflectionsEnabled,
+              infiniteBounces: args.infiniteBounces
+            });
+            return cleanObject(res);
+          }
+          case 'get_lumen': {
+            const res = await tools.renderingTools.getLumenSettings();
+            return cleanObject(res);
+          }
+          case 'set_vsm': {
+            const res = await tools.renderingTools.setVirtualShadowMaps({
+              enabled: args.enabled,
+              resolution: args.resolution,
+              pagePoolSize: args.pagePoolSize
+            });
+            return cleanObject(res);
+          }
+          case 'set_anti_aliasing': {
+            if (!args.aaMethod) throw new Error('Missing required parameter: aaMethod');
+            const res = await tools.renderingTools.setAntiAliasing({
+              method: args.aaMethod,
+              quality: args.aaQuality
+            });
+            return cleanObject(res);
+          }
+          case 'set_screen_percentage': {
+            if (args.percentage === undefined) throw new Error('Missing required parameter: percentage');
+            const res = await tools.renderingTools.setScreenPercentage({
+              percentage: args.percentage
+            });
+            return cleanObject(res);
+          }
+          case 'set_ray_tracing': {
+            const res = await tools.renderingTools.setRayTracing({
+              globalIllumination: args.globalIllumination,
+              reflections: args.reflections,
+              shadows: args.shadows,
+              ambientOcclusion: args.ambientOcclusion,
+              translucency: args.translucency
+            });
+            return cleanObject(res);
+          }
+          case 'get_info': {
+            const res = await tools.renderingTools.getRenderingInfo();
+            return cleanObject(res);
+          }
+          case 'set_post_process': {
+            const res = await tools.renderingTools.setPostProcessSettings({
+              actorName: args.actorName,
+              autoExposure: args.autoExposure,
+              exposureCompensation: args.exposureCompensation,
+              bloomIntensity: args.bloomIntensity,
+              vignetteIntensity: args.vignetteIntensity,
+              motionBlurAmount: args.motionBlurAmount,
+              ambientOcclusionIntensity: args.ambientOcclusionIntensity
+            });
+            return cleanObject(res);
+          }
+          default:
+            throw new Error(`Unknown manage_rendering action: ${args.action}`);
+        }
+
+      // 21. MATERIAL MANAGEMENT (Phase 7.6)
+      case 'manage_material':
+        switch (requireAction(args)) {
+          case 'create_instance': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide details for manage_material.create_instance',
+              {
+                name: {
+                  type: 'string',
+                  title: 'Instance Name',
+                  description: 'Name for the new Material Instance'
+                },
+                parentMaterial: {
+                  type: 'string',
+                  title: 'Parent Material',
+                  description: 'Content path to the parent material'
+                }
+              }
+            );
+            const name = requireNonEmptyString(args.name, 'name', 'Missing required parameter: name');
+            const parentMaterial = requireNonEmptyString(args.parentMaterial, 'parentMaterial', 'Missing required parameter: parentMaterial');
+            const res = await tools.materialTools.createMaterialInstance({
+              name,
+              parentMaterial,
+              savePath: args.savePath,
+              scalarParameters: args.scalarParameters,
+              vectorParameters: args.vectorParameters,
+              textureParameters: args.textureParameters
+            });
+            return cleanObject(res);
+          }
+          case 'set_scalar': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide details for manage_material.set_scalar',
+              {
+                materialPath: {
+                  type: 'string',
+                  title: 'Material Instance Path',
+                  description: 'Content path to the Material Instance'
+                },
+                parameterName: {
+                  type: 'string',
+                  title: 'Parameter Name',
+                  description: 'Name of the scalar parameter'
+                },
+                scalarValue: {
+                  type: 'number',
+                  title: 'Value',
+                  description: 'Float value to set'
+                }
+              }
+            );
+            const materialPath = requireNonEmptyString(args.materialPath, 'materialPath', 'Missing required parameter: materialPath');
+            const parameterName = requireNonEmptyString(args.parameterName, 'parameterName', 'Missing required parameter: parameterName');
+            if (args.scalarValue === undefined) throw new Error('Missing required parameter: scalarValue');
+            const res = await tools.materialTools.setScalarParameter({
+              materialPath,
+              parameterName,
+              value: args.scalarValue
+            });
+            return cleanObject(res);
+          }
+          case 'set_vector': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide details for manage_material.set_vector',
+              {
+                materialPath: {
+                  type: 'string',
+                  title: 'Material Instance Path',
+                  description: 'Content path to the Material Instance'
+                },
+                parameterName: {
+                  type: 'string',
+                  title: 'Parameter Name',
+                  description: 'Name of the vector parameter'
+                }
+              }
+            );
+            const materialPath = requireNonEmptyString(args.materialPath, 'materialPath', 'Missing required parameter: materialPath');
+            const parameterName = requireNonEmptyString(args.parameterName, 'parameterName', 'Missing required parameter: parameterName');
+            if (!args.vectorValue || typeof args.vectorValue !== 'object') throw new Error('Missing required parameter: vectorValue');
+            const res = await tools.materialTools.setVectorParameter({
+              materialPath,
+              parameterName,
+              value: args.vectorValue
+            });
+            return cleanObject(res);
+          }
+          case 'set_texture': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide details for manage_material.set_texture',
+              {
+                materialPath: {
+                  type: 'string',
+                  title: 'Material Instance Path',
+                  description: 'Content path to the Material Instance'
+                },
+                parameterName: {
+                  type: 'string',
+                  title: 'Parameter Name',
+                  description: 'Name of the texture parameter'
+                },
+                texturePath: {
+                  type: 'string',
+                  title: 'Texture Path',
+                  description: 'Content path to the texture asset'
+                }
+              }
+            );
+            const materialPath = requireNonEmptyString(args.materialPath, 'materialPath', 'Missing required parameter: materialPath');
+            const parameterName = requireNonEmptyString(args.parameterName, 'parameterName', 'Missing required parameter: parameterName');
+            const texturePath = requireNonEmptyString(args.texturePath, 'texturePath', 'Missing required parameter: texturePath');
+            const res = await tools.materialTools.setTextureParameter({
+              materialPath,
+              parameterName,
+              texturePath
+            });
+            return cleanObject(res);
+          }
+          case 'get_parameters': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide the Material Instance path for manage_material.get_parameters',
+              {
+                materialPath: {
+                  type: 'string',
+                  title: 'Material Instance Path',
+                  description: 'Content path to the Material Instance'
+                }
+              }
+            );
+            const materialPath = requireNonEmptyString(args.materialPath, 'materialPath', 'Missing required parameter: materialPath');
+            const res = await tools.materialTools.getParameters({ materialPath });
+            return cleanObject(res);
+          }
+          case 'copy': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide details for manage_material.copy',
+              {
+                sourcePath: {
+                  type: 'string',
+                  title: 'Source Path',
+                  description: 'Content path to the source Material Instance'
+                },
+                name: {
+                  type: 'string',
+                  title: 'New Name',
+                  description: 'Name for the copied Material Instance'
+                }
+              }
+            );
+            const sourcePath = requireNonEmptyString(args.sourcePath, 'sourcePath', 'Missing required parameter: sourcePath');
+            const newName = requireNonEmptyString(args.name, 'name', 'Missing required parameter: name');
+            const res = await tools.materialTools.copyMaterialInstance({
+              sourcePath,
+              newName,
+              savePath: args.savePath,
+              overrideScalars: args.overrideScalars,
+              overrideVectors: args.overrideVectors
+            });
+            return cleanObject(res);
+          }
+          default:
+            throw new Error(`Unknown manage_material action: ${args.action}`);
+        }
+
+      // 22. C++ CLASS MANAGEMENT (Phase 6)
+      case 'manage_cpp':
+        switch (requireAction(args)) {
+          case 'create_class': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide details for manage_cpp.create_class',
+              {
+                className: {
+                  type: 'string',
+                  title: 'Class Name',
+                  description: 'Name for the C++ class (without A/U prefix)'
+                },
+                classType: {
+                  type: 'string',
+                  title: 'Class Type',
+                  description: 'Base class type (Actor, Character, Pawn, etc.)'
+                }
+              }
+            );
+            const className = requireNonEmptyString(args.className, 'className', 'Missing required parameter: className');
+            const classType = requireNonEmptyString(args.classType, 'classType', 'Missing required parameter: classType');
+            const res = await tools.cppTools.createClass({
+              className,
+              classType,
+              moduleName: args.moduleName,
+              properties: args.properties,
+              functions: args.functions,
+              interfaces: args.interfaces,
+              includeReplication: args.includeReplication !== false // Default true for multiplayer
+            });
+            return cleanObject(res);
+          }
+          case 'add_property': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide details for manage_cpp.add_property',
+              {
+                className: {
+                  type: 'string',
+                  title: 'Class Name',
+                  description: 'C++ class to add property to'
+                }
+              }
+            );
+            const className = requireNonEmptyString(args.className, 'className', 'Missing required parameter: className');
+            if (!args.property) throw new Error('Missing required parameter: property');
+            const res = await tools.cppTools.addProperty({
+              className,
+              property: args.property
+            });
+            return cleanObject(res);
+          }
+          case 'add_function': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide details for manage_cpp.add_function',
+              {
+                className: {
+                  type: 'string',
+                  title: 'Class Name',
+                  description: 'C++ class to add function to'
+                }
+              }
+            );
+            const className = requireNonEmptyString(args.className, 'className', 'Missing required parameter: className');
+            if (!args.function) throw new Error('Missing required parameter: function');
+            const res = await tools.cppTools.addFunction({
+              className,
+              function: args.function
+            });
+            return cleanObject(res);
+          }
+          case 'list_templates': {
+            const res = tools.cppTools.listTemplates();
+            return cleanObject({ success: true, ...res });
+          }
+          case 'create_gas_playerstate': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide details for manage_cpp.create_gas_playerstate',
+              {
+                className: {
+                  type: 'string',
+                  title: 'Class Name',
+                  description: 'Name for the GAS PlayerState class'
+                }
+              }
+            );
+            const className = requireNonEmptyString(args.className, 'className', 'Missing required parameter: className');
+            const res = await tools.cppTools.createGASPlayerState({
+              className,
+              attributeSetClass: args.attributeSetClass,
+              abilities: args.abilities
+            });
+            return cleanObject(res);
+          }
+          // GAS GameMode
+          case 'create_gas_gamemode': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide details for manage_cpp.create_gas_gamemode',
+              {
+                className: {
+                  type: 'string',
+                  title: 'Class Name',
+                  description: 'Name for the GAS GameMode class'
+                }
+              }
+            );
+            const className = requireNonEmptyString(args.className, 'className', 'Missing required parameter: className');
+            const res = await tools.cppTools.createGASGameMode({
+              className,
+              defaultPawnClass: args.defaultPawnClass,
+              playerControllerClass: args.playerControllerClass,
+              playerStateClass: args.playerStateClass,
+              gameStateClass: args.gameStateClass
+            });
+            return cleanObject(res);
+          }
+          // GameplayEffect
+          case 'create_gameplay_effect': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide details for manage_cpp.create_gameplay_effect',
+              {
+                className: {
+                  type: 'string',
+                  title: 'Effect Name',
+                  description: 'Name for the GameplayEffect class'
+                }
+              }
+            );
+            const name = requireNonEmptyString(args.className || args.name, 'className', 'Missing required parameter: className');
+            const res = await tools.cppTools.createGameplayEffect({
+              name,
+              durationType: args.durationType,
+              durationMagnitude: args.durationMagnitude,
+              modifiers: args.modifiers,
+              tags: args.tags
+            });
+            return cleanObject(res);
+          }
+          // Input Action Data Asset
+          case 'create_input_action_data_asset': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide details for manage_cpp.create_input_action_data_asset',
+              {
+                className: {
+                  type: 'string',
+                  title: 'Asset Name',
+                  description: 'Name for the Input Action Data Asset class'
+                }
+              }
+            );
+            const name = requireNonEmptyString(args.className || args.name, 'className', 'Missing required parameter: className');
+            const res = await tools.cppTools.createInputActionDataAsset({
+              name,
+              actions: args.actions
+            });
+            return cleanObject(res);
+          }
+          // Widget Stack Manager
+          case 'create_widget_stack_manager': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide details for manage_cpp.create_widget_stack_manager',
+              {
+                className: {
+                  type: 'string',
+                  title: 'Manager Name',
+                  description: 'Name for the Widget Stack Manager subsystem'
+                }
+              }
+            );
+            const name = requireNonEmptyString(args.className || args.name, 'className', 'Missing required parameter: className');
+            const res = await tools.cppTools.createWidgetStackManager({ name });
+            return cleanObject(res);
+          }
+          // DataTable Struct
+          case 'create_datatable_struct': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide details for manage_cpp.create_datatable_struct',
+              {
+                className: {
+                  type: 'string',
+                  title: 'Struct Name',
+                  description: 'Name for the DataTable row struct'
+                }
+              }
+            );
+            const name = requireNonEmptyString(args.className || args.name, 'className', 'Missing required parameter: className');
+            if (!args.fields || !Array.isArray(args.fields)) {
+              throw new Error('Missing required parameter: fields (array of field definitions)');
+            }
+            const res = await tools.cppTools.createDataTableStruct({
+              name,
+              fields: args.fields
+            });
+            return cleanObject(res);
+          }
+          // Primary Data Asset
+          case 'create_primary_data_asset': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide details for manage_cpp.create_primary_data_asset',
+              {
+                className: {
+                  type: 'string',
+                  title: 'Asset Name',
+                  description: 'Name for the Primary Data Asset class'
+                }
+              }
+            );
+            const name = requireNonEmptyString(args.className || args.name, 'className', 'Missing required parameter: className');
+            const res = await tools.cppTools.createPrimaryDataAsset({
+              name,
+              assetType: args.assetType,
+              properties: args.properties
+            });
+            return cleanObject(res);
+          }
+          // Add Module Dependency
+          case 'add_module_dependency': {
+            if (!args.dependencies || !Array.isArray(args.dependencies) || args.dependencies.length === 0) {
+              throw new Error('Missing required parameter: dependencies (array of module names)');
+            }
+            const res = await tools.cppTools.addModuleDependency({
+              moduleName: args.moduleName,
+              dependencies: args.dependencies,
+              isPublic: args.isPublic
+            });
+            return cleanObject(res);
+          }
+          // Get Module Dependencies
+          case 'get_module_dependencies': {
+            const res = await tools.cppTools.getModuleDependencies({
+              moduleName: args.moduleName
+            });
+            return cleanObject(res);
+          }
+          // Create Module
+          case 'create_module': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide details for manage_cpp.create_module',
+              {
+                moduleName: {
+                  type: 'string',
+                  title: 'Module Name',
+                  description: 'Name for the new module'
+                }
+              }
+            );
+            const moduleName = requireNonEmptyString(args.moduleName, 'moduleName', 'Missing required parameter: moduleName');
+            const res = await tools.cppTools.createModule({
+              moduleName,
+              moduleType: args.moduleType,
+              loadingPhase: args.loadingPhase
+            });
+            return cleanObject(res);
+          }
+          // Get Project Info
+          case 'get_project_info': {
+            const res = await tools.cppTools.getProjectInfo();
+            return cleanObject(res);
+          }
+          // Enable Plugin
+          case 'enable_plugin': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide details for manage_cpp.enable_plugin',
+              {
+                pluginName: {
+                  type: 'string',
+                  title: 'Plugin Name',
+                  description: 'Name of the plugin to enable/disable'
+                }
+              }
+            );
+            const pluginName = requireNonEmptyString(args.pluginName, 'pluginName', 'Missing required parameter: pluginName');
+            const res = await tools.cppTools.enablePlugin({
+              pluginName,
+              enabled: args.enabled
+            });
+            return cleanObject(res);
+          }
+          default:
+            throw new Error(`Unknown manage_cpp action: ${args.action}`);
+        }
+
+      // 23. COLLISION MANAGEMENT
+      case 'manage_collision':
+        switch (requireAction(args)) {
+          case 'set_profile': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide actor and profile for manage_collision.set_profile',
+              {
+                actorName: {
+                  type: 'string',
+                  title: 'Actor Name',
+                  description: 'Actor to set collision profile on'
+                },
+                profile: {
+                  type: 'string',
+                  title: 'Collision Profile',
+                  description: 'Collision profile preset (e.g., BlockAll, OverlapAll, Pawn)'
+                }
+              }
+            );
+            const actorName = requireNonEmptyString(args.actorName, 'actorName', 'Missing required parameter: actorName');
+            const profile = requireNonEmptyString(args.profile, 'profile', 'Missing required parameter: profile');
+            const res = await tools.collisionTools.setProfile({ actorName, profile });
+            return cleanObject(res);
+          }
+          case 'set_response': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide actor, channel, and response for manage_collision.set_response',
+              {
+                actorName: {
+                  type: 'string',
+                  title: 'Actor Name',
+                  description: 'Actor to configure collision response'
+                },
+                channel: {
+                  type: 'string',
+                  title: 'Collision Channel',
+                  description: 'Channel to set response for (WorldStatic, Pawn, etc.)'
+                },
+                response: {
+                  type: 'string',
+                  title: 'Response Type',
+                  description: 'Ignore, Overlap, or Block'
+                }
+              }
+            );
+            const actorName = requireNonEmptyString(args.actorName, 'actorName', 'Missing required parameter: actorName');
+            const channel = requireNonEmptyString(args.channel, 'channel', 'Missing required parameter: channel');
+            const response = requireNonEmptyString(args.response, 'response', 'Missing required parameter: response');
+            const res = await tools.collisionTools.setResponse({ actorName, channel, response: response as 'Ignore' | 'Overlap' | 'Block' });
+            return cleanObject(res);
+          }
+          case 'set_enabled': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide actor and enabled state for manage_collision.set_enabled',
+              {
+                actorName: {
+                  type: 'string',
+                  title: 'Actor Name',
+                  description: 'Actor to enable/disable collision'
+                }
+              }
+            );
+            const actorName = requireNonEmptyString(args.actorName, 'actorName', 'Missing required parameter: actorName');
+            const enabled = args.enabled !== false; // Default to true if not specified
+            const res = await tools.collisionTools.setEnabled({ actorName, enabled, type: args.type });
+            return cleanObject(res);
+          }
+          case 'get_settings': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Which actor should manage_collision.get_settings query?',
+              {
+                actorName: {
+                  type: 'string',
+                  title: 'Actor Name',
+                  description: 'Actor to get collision settings from'
+                }
+              }
+            );
+            const actorName = requireNonEmptyString(args.actorName, 'actorName', 'Missing required parameter: actorName');
+            const res = await tools.collisionTools.getSettings({ actorName });
+            return cleanObject(res);
+          }
+          default:
+            throw new Error(`Unknown manage_collision action: ${args.action}`);
+        }
 
       default:
         throw new Error(`Unknown consolidated tool: ${name}`);

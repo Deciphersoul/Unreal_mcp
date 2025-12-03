@@ -59,32 +59,35 @@ Supported actions: list, import, create_material.`,
   // 2. ACTOR CONTROL - Combines actor operations
   {
     name: 'control_actor',
-  description: `Viewport actor toolkit for spawning, removing, or nudging actors with physics forces.
+  description: `Viewport actor toolkit for spawning, transforming, removing, or nudging actors.
 
 Use it when you need to:
 - drop a class or mesh into the level (classPath accepts names or asset paths).
 - delete actors by label, case-insensitively.
+- transform actors (move, rotate, scale).
+- spawn multiple actors in a batch (grid or line).
+- apply materials to actors.
 - push a physics-enabled actor with a world-space force vector.
 
-Supported actions: spawn, delete, apply_force.`,
+Supported actions: spawn, delete, transform, batch_spawn, set_material, apply_force.`,
     inputSchema: {
       type: 'object',
       properties: {
         action: { 
           type: 'string', 
-          enum: ['spawn', 'delete', 'apply_force'],
+          enum: ['spawn', 'delete', 'transform', 'batch_spawn', 'set_material', 'apply_force'],
           description: 'Action to perform'
         },
         // Common
-        actorName: { type: 'string', description: 'Actor label/name (optional for spawn, auto-generated if not provided; required for delete). Case-insensitive for delete action.' },
+        actorName: { type: 'string', description: 'Actor label/name. Required for delete, transform, set_material. Optional for spawn (auto-generated if not provided).' },
         classPath: { 
           type: 'string', 
-          description: 'Actor class (e.g., "StaticMeshActor", "CameraActor") OR asset path (e.g., "/Engine/BasicShapes/Cube", "/Game/MyMesh"). Asset paths will automatically spawn as StaticMeshActor with the mesh applied. Required for spawn action.'
+          description: 'Actor class (e.g., "StaticMeshActor", "CameraActor") OR asset path (e.g., "/Engine/BasicShapes/Cube", "/Game/MyMesh"). Required for spawn and batch_spawn actions.'
         },
-        // Transform
+        // Transform (for spawn, transform)
         location: {
           type: 'object',
-          description: 'World space location in centimeters (Unreal units). Optional for spawn, defaults to origin.',
+          description: 'World space location in centimeters. For spawn: defaults to origin. For transform: new position.',
           properties: {
             x: { type: 'number', description: 'X coordinate (forward axis in Unreal)' },
             y: { type: 'number', description: 'Y coordinate (right axis in Unreal)' },
@@ -93,17 +96,48 @@ Supported actions: spawn, delete, apply_force.`,
         },
         rotation: {
           type: 'object',
-          description: 'World space rotation in degrees. Optional for spawn, defaults to zero rotation.',
+          description: 'World space rotation in degrees. For spawn: defaults to zero. For transform: new rotation.',
           properties: {
             pitch: { type: 'number', description: 'Pitch rotation in degrees (Y-axis rotation)' },
             yaw: { type: 'number', description: 'Yaw rotation in degrees (Z-axis rotation)' },
             roll: { type: 'number', description: 'Roll rotation in degrees (X-axis rotation)' }
           }
         },
+        scale: {
+          type: 'object',
+          description: 'Scale multiplier for transform action. 1.0 = original size.',
+          properties: {
+            x: { type: 'number', description: 'X scale multiplier' },
+            y: { type: 'number', description: 'Y scale multiplier' },
+            z: { type: 'number', description: 'Z scale multiplier' }
+          }
+        },
+        // Batch spawn
+        count: { type: 'number', description: 'Number of actors to spawn in a line (for batch_spawn)' },
+        gridSize: {
+          type: 'object',
+          description: 'Grid dimensions for batch_spawn (alternative to count)',
+          properties: {
+            rows: { type: 'number', description: 'Number of rows' },
+            cols: { type: 'number', description: 'Number of columns' }
+          }
+        },
+        spacing: { type: 'number', description: 'Distance between actors in batch_spawn (default: 200 cm)' },
+        startLocation: {
+          type: 'object',
+          description: 'Starting location for batch_spawn grid/line',
+          properties: {
+            x: { type: 'number' }, y: { type: 'number' }, z: { type: 'number' }
+          }
+        },
+        namePrefix: { type: 'string', description: 'Prefix for actor names in batch_spawn' },
+        // Material
+        materialPath: { type: 'string', description: 'Content path to material asset for set_material (e.g., "/Game/Materials/M_Red")' },
+        slotIndex: { type: 'number', description: 'Material slot index (default: 0) for set_material' },
         // Physics
         force: {
           type: 'object',
-          description: 'Force vector to apply in Newtons. Required for apply_force action. Actor must have physics simulation enabled.',
+          description: 'Force vector to apply in Newtons. Required for apply_force action.',
           properties: {
             x: { type: 'number', description: 'Force magnitude along X-axis' },
             y: { type: 'number', description: 'Force magnitude along Y-axis' },
@@ -119,6 +153,8 @@ Supported actions: spawn, delete, apply_force.`,
         success: { type: 'boolean', description: 'Whether the operation succeeded' },
         actor: { type: 'string', description: 'Spawned actor name (for spawn)' },
         deleted: { type: 'string', description: 'Deleted actor name (for delete)' },
+        spawned: { type: 'array', description: 'List of spawned actors (for batch_spawn)' },
+        count: { type: 'number', description: 'Number of actors spawned (for batch_spawn)' },
         physicsEnabled: { type: 'boolean', description: 'Physics state (for apply_force)' },
         message: { type: 'string', description: 'Status message' },
         error: { type: 'string', description: 'Error message if failed' }
@@ -693,8 +729,13 @@ Use it when you need to:
 - add actors, spawnable cameras, or other bindings.
 - adjust sequence metadata (frame rate, bounds, playback window).
 - drive playback (play/pause/stop), adjust speed, or fetch binding info.
+- add transform keyframes to animate actor movement.
+- create camera cuts for cinematic camera switching.
+- add property tracks to animate scalar/vector/color properties.
+- add audio tracks with sound assets.
+- add event tracks for triggering Blueprint events.
 
-Supported actions: create, open, add_camera, add_actor, add_actors, remove_actors, get_bindings, add_spawnable_from_class, play, pause, stop, set_properties, get_properties, set_playback_speed.`,
+Supported actions: create, open, add_camera, add_actor, add_actors, remove_actors, get_bindings, add_spawnable_from_class, play, pause, stop, set_properties, get_properties, set_playback_speed, add_transform_keyframe, add_camera_cut_track, add_camera_cut, get_tracks, add_property_track, add_property_keyframe, add_audio_track, add_event_track, add_event_key.`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -703,7 +744,9 @@ Supported actions: create, open, add_camera, add_actor, add_actors, remove_actor
           enum: [
             'create', 'open', 'add_camera', 'add_actor', 'add_actors', 
             'remove_actors', 'get_bindings', 'add_spawnable_from_class',
-            'play', 'pause', 'stop', 'set_properties', 'get_properties', 'set_playback_speed'
+            'play', 'pause', 'stop', 'set_properties', 'get_properties', 'set_playback_speed',
+            'add_transform_keyframe', 'add_camera_cut_track', 'add_camera_cut', 'get_tracks',
+            'add_property_track', 'add_property_keyframe', 'add_audio_track', 'add_event_track', 'add_event_key'
           ], 
           description: 'Sequence action' 
         },
@@ -718,7 +761,38 @@ Supported actions: create, open, add_camera, add_actor, add_actors, remove_actor
         playbackStart: { type: 'number', description: 'First frame of playback range (inclusive). Optional for set_properties.' },
         playbackEnd: { type: 'number', description: 'Last frame of playback range (inclusive). Optional for set_properties.' },
         speed: { type: 'number', description: 'Playback speed multiplier. 1.0 is normal speed, 2.0 is double speed, 0.5 is half speed. Required for set_playback_speed action.' },
-        loopMode: { type: 'string', enum: ['once', 'loop', 'pingpong'], description: 'How sequence loops: "once" plays once and stops, "loop" repeats from start, "pingpong" plays forward then backward. Optional for set_properties.' }
+        loopMode: { type: 'string', enum: ['once', 'loop', 'pingpong'], description: 'How sequence loops: "once" plays once and stops, "loop" repeats from start, "pingpong" plays forward then backward. Optional for set_properties.' },
+        bindingName: { type: 'string', description: 'Name of the binding (actor label) to target. Required for add_transform_keyframe and get_tracks actions.' },
+        cameraBindingName: { type: 'string', description: 'Name of the camera binding for camera cuts. Required for add_camera_cut action.' },
+        frame: { type: 'number', description: 'Frame number for keyframe placement. Required for add_transform_keyframe action.' },
+        startFrame: { type: 'number', description: 'Start frame for camera cut section. Required for add_camera_cut action.' },
+        endFrame: { type: 'number', description: 'End frame for camera cut section. Optional, defaults to sequence end.' },
+        location: { 
+          type: 'object', 
+          properties: { x: { type: 'number' }, y: { type: 'number' }, z: { type: 'number' } },
+          description: 'Location for transform keyframe. Optional for add_transform_keyframe.'
+        },
+        rotation: { 
+          type: 'object', 
+          properties: { pitch: { type: 'number' }, yaw: { type: 'number' }, roll: { type: 'number' } },
+          description: 'Rotation for transform keyframe. Optional for add_transform_keyframe.'
+        },
+        scale: { 
+          type: 'object', 
+          properties: { x: { type: 'number' }, y: { type: 'number' }, z: { type: 'number' } },
+          description: 'Scale for transform keyframe. Optional for add_transform_keyframe.'
+        },
+        interpolation: { type: 'string', enum: ['linear', 'constant', 'cubic'], description: 'Keyframe interpolation mode. Optional for add_transform_keyframe, defaults to cubic.' },
+        // Property track parameters (7.8)
+        propertyPath: { type: 'string', description: 'Property path to animate (e.g., "RelativeLocation", "Intensity"). Required for add_property_track and add_property_keyframe.' },
+        propertyType: { type: 'string', enum: ['float', 'bool', 'vector', 'color'], description: 'Property value type. Optional for add_property_track, defaults to float.' },
+        value: { description: 'Value for property keyframe. Number for float, boolean for bool, {x,y,z} for vector, {r,g,b,a} for color. Required for add_property_keyframe.' },
+        // Audio track parameters (7.9)
+        soundPath: { type: 'string', description: 'Content path to sound asset (SoundCue or SoundWave). Required for add_audio_track.' },
+        rowIndex: { type: 'number', description: 'Row index for audio section. Optional for add_audio_track.' },
+        // Event track parameters (7.10)
+        eventName: { type: 'string', description: 'Name for the event track. Required for add_event_track and add_event_key.' },
+        functionName: { type: 'string', description: 'Blueprint function name to call. Optional for add_event_key, defaults to eventName.' }
       },
       required: ['action']
     },
@@ -738,6 +812,13 @@ Supported actions: create, open, add_camera, add_actor, add_actors, remove_actor
         playbackEnd: { type: 'number' },
         duration: { type: 'number' },
         playbackSpeed: { type: 'number' },
+        keyframes: { type: 'array', items: { type: 'object' }, description: 'Added keyframe details' },
+        tracks: { type: 'array', items: { type: 'object' }, description: 'Track information for binding' },
+        trackCount: { type: 'number' },
+        cameraName: { type: 'string' },
+        propertyPath: { type: 'string', description: 'Property path for property track' },
+        trackType: { type: 'string', description: 'Type of track created' },
+        soundPath: { type: 'string', description: 'Sound asset path for audio track' },
         message: { type: 'string' },
         error: { type: 'string' }
       }
@@ -771,6 +852,970 @@ Supported actions: inspect_object, set_property.`,
         info: { type: 'object' },
         message: { type: 'string' },
         error: { type: 'string' }
+      }
+    }
+  },
+
+  // 14. QUERY LEVEL - Actor queries and scene understanding
+  {
+    name: 'query_level',
+    description: `Level query tool for understanding what actors exist in the current scene.
+
+Use it when you need to:
+- see all actors in the level with their transforms and properties.
+- find actors by class, tag, or name pattern.
+- understand the current selection state.
+- count actors by type.
+
+Supported actions: get_all, get_selected, get_by_class, get_by_tag, get_by_name, count.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action: {
+          type: 'string',
+          enum: ['get_all', 'get_selected', 'get_by_class', 'get_by_tag', 'get_by_name', 'count'],
+          description: 'Query action to perform'
+        },
+        className: {
+          type: 'string',
+          description: 'Actor class name to filter by (e.g., "StaticMeshActor", "PointLight"). Used with get_by_class action.'
+        },
+        tag: {
+          type: 'string',
+          description: 'Actor tag to filter by. Used with get_by_tag action.'
+        },
+        namePattern: {
+          type: 'string',
+          description: 'Name pattern with wildcards (e.g., "Wall_*", "*_Door_*"). Used with get_by_name action.'
+        },
+        includeHidden: {
+          type: 'boolean',
+          description: 'Include hidden actors in results. Default: false.'
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum number of actors to return. Default: 100.'
+        },
+        offset: {
+          type: 'number',
+          description: 'Offset for pagination. Default: 0.'
+        }
+      },
+      required: ['action']
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        actors: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              label: { type: 'string' },
+              class: { type: 'string' },
+              path: { type: 'string' },
+              location: { type: 'object' },
+              rotation: { type: 'object' },
+              scale: { type: 'object' },
+              tags: { type: 'array', items: { type: 'string' } },
+              isHidden: { type: 'boolean' },
+              isSelected: { type: 'boolean' }
+            }
+          }
+        },
+        count: { type: 'number' },
+        totalCount: { type: 'number' },
+        byClass: { type: 'object', description: 'Actor counts by class (for count action)' },
+        message: { type: 'string' },
+        error: { type: 'string' }
+      }
+    }
+  },
+
+  // 15. MANAGE SELECTION - Editor selection control
+  {
+    name: 'manage_selection',
+    description: `Editor selection control for selecting, deselecting, and querying actor selection state.
+
+Use it when you need to:
+- select specific actors by name or path.
+- clear the current selection.
+- select all actors of a specific class.
+- invert the current selection.
+
+Supported actions: select, deselect, clear, select_all_of_class, invert, get.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action: {
+          type: 'string',
+          enum: ['select', 'deselect', 'clear', 'select_all_of_class', 'invert', 'get'],
+          description: 'Selection action to perform'
+        },
+        actorNames: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Actor names/labels to select or deselect'
+        },
+        actorPaths: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Full actor object paths to select or deselect'
+        },
+        className: {
+          type: 'string',
+          description: 'Class name for select_all_of_class action'
+        },
+        additive: {
+          type: 'boolean',
+          description: 'Add to existing selection instead of replacing. Default: false.'
+        }
+      },
+      required: ['action']
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        selectedCount: { type: 'number' },
+        selectedActors: { type: 'array', items: { type: 'string' } },
+        message: { type: 'string' },
+        error: { type: 'string' }
+      }
+    }
+  },
+
+  // 16. DEBUG TOOLS EXTENDED - Enhanced debugging with error watching
+  {
+    name: 'debug_extended',
+    description: `Extended debugging tools with error watching, log analysis, and connection status.
+
+Use it when you need to:
+- get recent log entries with filtering by category, severity, or search terms.
+- start/stop watching for new errors in real-time.
+- get recent errors or warnings specifically.
+- check the connection status with Unreal Engine.
+
+Supported actions: get_log, get_errors, get_warnings, start_watch, stop_watch, get_watched_errors, clear_errors, check_connection.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action: {
+          type: 'string',
+          enum: ['get_log', 'get_errors', 'get_warnings', 'start_watch', 'stop_watch', 'get_watched_errors', 'clear_errors', 'check_connection'],
+          description: 'Debug action to perform'
+        },
+        lines: {
+          type: 'number',
+          description: 'Number of log lines to retrieve. Default: 100.'
+        },
+        category: {
+          type: 'string',
+          description: 'Log category filter (e.g., "LogPython", "LogBlueprint", "LogTemp")'
+        },
+        severity: {
+          type: 'string',
+          enum: ['all', 'errors', 'warnings', 'errors_and_warnings'],
+          description: 'Severity filter for log entries'
+        },
+        search: {
+          type: 'string',
+          description: 'Text to search for in log messages'
+        },
+        watchInterval: {
+          type: 'number',
+          description: 'Interval in milliseconds for error watching. Default: 2000.'
+        }
+      },
+      required: ['action']
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        entries: { type: 'array', items: { type: 'object' } },
+        errors: { type: 'array', items: { type: 'object' } },
+        warnings: { type: 'array', items: { type: 'object' } },
+        count: { type: 'number' },
+        isWatching: { type: 'boolean' },
+        connected: { type: 'boolean' },
+        logPath: { type: 'string' },
+        message: { type: 'string' },
+        error: { type: 'string' }
+      }
+    }
+  },
+
+  // 17. EDITOR LIFECYCLE - Save, reload, hot-reload, project management
+  {
+    name: 'editor_lifecycle',
+    description: `Editor lifecycle management for saving, reloading, and project state.
+
+Use it when you need to:
+- save the current level or all modified assets.
+- trigger Blueprint hot reload after changes.
+- restart a PIE (Play In Editor) session.
+- load or create levels.
+- check editor state (current level, selection, PIE status).
+- refresh assets from disk.
+
+Supported actions: save_level, save_all, get_dirty, hot_reload, compile_blueprint, restart_pie, load_level, create_level, get_state, refresh_assets, force_gc.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action: {
+          type: 'string',
+          enum: ['save_level', 'save_all', 'get_dirty', 'hot_reload', 'compile_blueprint', 'restart_pie', 'load_level', 'create_level', 'get_state', 'refresh_assets', 'force_gc'],
+          description: 'Lifecycle action to perform'
+        },
+        blueprintPath: {
+          type: 'string',
+          description: 'Path to Blueprint for compile_blueprint action'
+        },
+        levelPath: {
+          type: 'string',
+          description: 'Path to level for load_level action'
+        },
+        levelName: {
+          type: 'string',
+          description: 'Name for new level in create_level action'
+        },
+        templatePath: {
+          type: 'string',
+          description: 'Optional template path for create_level action'
+        },
+        streaming: {
+          type: 'boolean',
+          description: 'Whether to use streaming load for load_level action'
+        }
+      },
+      required: ['action']
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        message: { type: 'string' },
+        details: { type: 'object' },
+        state: { type: 'object' },
+        dirtyAssets: { type: 'array', items: { type: 'string' } },
+        error: { type: 'string' }
+      }
+    }
+  },
+
+  // 18. PROJECT BUILD - Packaging and build operations
+  {
+    name: 'project_build',
+    description: `Project packaging and build tools for Windows deployment.
+
+Use it when you need to:
+- validate the project before packaging.
+- cook content for Windows.
+- package the game for Windows (Development or Shipping).
+- build lighting, navigation, or all.
+- open the packaged output folder.
+
+Supported actions: validate, cook, package, build_lighting, build_navigation, build_all, open_packaged.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action: {
+          type: 'string',
+          enum: ['validate', 'cook', 'package', 'build_lighting', 'build_navigation', 'build_all', 'open_packaged'],
+          description: 'Build action to perform'
+        },
+        configuration: {
+          type: 'string',
+          enum: ['Development', 'Shipping', 'DebugGame'],
+          description: 'Build configuration for package action. Default: Development'
+        },
+        outputDir: {
+          type: 'string',
+          description: 'Custom output directory for package action'
+        },
+        compressed: {
+          type: 'boolean',
+          description: 'Whether to compress the packaged build. Default: true'
+        },
+        forDistribution: {
+          type: 'boolean',
+          description: 'Whether to package for distribution (signs executables). Default: false'
+        },
+        quality: {
+          type: 'string',
+          enum: ['Preview', 'Medium', 'High', 'Production'],
+          description: 'Lighting build quality. Default: High'
+        }
+      },
+      required: ['action']
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        message: { type: 'string' },
+        valid: { type: 'boolean' },
+        issues: { type: 'array', items: { type: 'string' } },
+        warnings: { type: 'array', items: { type: 'string' } },
+        details: { type: 'object' },
+        logPath: { type: 'string' },
+        error: { type: 'string' }
+      }
+    }
+  },
+
+  // 19. ENHANCED INPUT - Phase 7.5
+  {
+    name: 'manage_input',
+    description: `UE5 Enhanced Input System management for InputActions and InputMappingContexts.
+
+Use it when you need to:
+- create Input Action assets with value types and triggers.
+- create Input Mapping Context assets.
+- add key mappings to contexts.
+- list and query existing input assets.
+
+Supported actions: create_action, create_context, add_mapping, get_mappings, remove_mapping, list_actions, list_contexts.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action: {
+          type: 'string',
+          enum: ['create_action', 'create_context', 'add_mapping', 'get_mappings', 'remove_mapping', 'list_actions', 'list_contexts'],
+          description: 'Input action to perform'
+        },
+        // Common
+        name: {
+          type: 'string',
+          description: 'Name for new Input Action or Mapping Context.'
+        },
+        savePath: {
+          type: 'string',
+          description: 'Content path to save assets (default: /Game/Input).'
+        },
+        // For create_action
+        valueType: {
+          type: 'string',
+          enum: ['Digital', 'Axis1D', 'Axis2D', 'Axis3D'],
+          description: 'Input value type. Digital for buttons, Axis1D for single-axis (triggers), Axis2D for joysticks, Axis3D for 3D motion.'
+        },
+        triggers: {
+          type: 'array',
+          items: { type: 'string', enum: ['Pressed', 'Released', 'Hold', 'Tap', 'Pulse'] },
+          description: 'Input triggers to add to the action.'
+        },
+        consumeInput: {
+          type: 'boolean',
+          description: 'Whether this action consumes input (prevents propagation).'
+        },
+        // For add_mapping / remove_mapping
+        contextPath: {
+          type: 'string',
+          description: 'Content path to the Input Mapping Context.'
+        },
+        actionPath: {
+          type: 'string',
+          description: 'Content path to the Input Action.'
+        },
+        key: {
+          type: 'string',
+          description: 'Key name (e.g., "W", "SpaceBar", "Gamepad_FaceButton_Bottom", "LeftMouseButton").'
+        },
+        modifiers: {
+          type: 'array',
+          items: { type: 'string', enum: ['Shift', 'Ctrl', 'Alt', 'Cmd', 'Negate', 'Swizzle', 'DeadZone', 'Smooth'] },
+          description: 'Input modifiers to apply.'
+        },
+        // For list operations
+        directory: {
+          type: 'string',
+          description: 'Directory to search for input assets (default: /Game).'
+        }
+      },
+      required: ['action']
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        path: { type: 'string', description: 'Created asset path' },
+        valueType: { type: 'string' },
+        exists: { type: 'boolean' },
+        mappingCount: { type: 'number' },
+        removedCount: { type: 'number' },
+        mappings: { type: 'array', items: { type: 'object' } },
+        actions: { type: 'array', items: { type: 'object' } },
+        contexts: { type: 'array', items: { type: 'object' } },
+        message: { type: 'string' },
+        error: { type: 'string' },
+        warnings: { type: 'array', items: { type: 'string' } }
+      }
+    }
+  },
+
+  // 20. RENDERING SETTINGS - Phase 7.3
+  {
+    name: 'manage_rendering',
+    description: `UE5 rendering feature control for Nanite, Lumen, VSM, ray tracing, and post processing.
+
+Use it when you need to:
+- enable/disable Nanite on static meshes.
+- configure Lumen global illumination settings.
+- set Virtual Shadow Maps quality.
+- toggle ray tracing features.
+- adjust anti-aliasing and screen percentage.
+- modify post process volume settings.
+
+Supported actions: set_nanite, get_nanite, set_lumen, get_lumen, set_vsm, set_anti_aliasing, set_screen_percentage, set_ray_tracing, get_info, set_post_process.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action: {
+          type: 'string',
+          enum: ['set_nanite', 'get_nanite', 'set_lumen', 'get_lumen', 'set_vsm', 'set_anti_aliasing', 'set_screen_percentage', 'set_ray_tracing', 'get_info', 'set_post_process'],
+          description: 'Rendering action to perform'
+        },
+        // For Nanite
+        meshPath: {
+          type: 'string',
+          description: 'Content path to static mesh for Nanite operations.'
+        },
+        enabled: {
+          type: 'boolean',
+          description: 'Enable/disable flag for various features.'
+        },
+        // For Lumen
+        method: {
+          type: 'string',
+          enum: ['ScreenTraces', 'HardwareRayTracing'],
+          description: 'Lumen tracing method.'
+        },
+        quality: {
+          type: 'string',
+          enum: ['Low', 'Medium', 'High', 'Epic'],
+          description: 'Quality level for Lumen.'
+        },
+        finalGatherQuality: {
+          type: 'number',
+          description: 'Lumen final gather quality (0.5-4.0).'
+        },
+        reflectionsEnabled: {
+          type: 'boolean',
+          description: 'Enable Lumen reflections.'
+        },
+        // For VSM
+        resolution: {
+          type: 'number',
+          enum: [512, 1024, 2048, 4096],
+          description: 'Virtual Shadow Map resolution.'
+        },
+        pagePoolSize: {
+          type: 'number',
+          description: 'VSM page pool size.'
+        },
+        // For Anti-Aliasing
+        aaMethod: {
+          type: 'string',
+          enum: ['None', 'FXAA', 'TAA', 'TSR', 'MSAA'],
+          description: 'Anti-aliasing method.'
+        },
+        aaQuality: {
+          type: 'number',
+          enum: [0, 1, 2, 3, 4],
+          description: 'Anti-aliasing quality (0-4).'
+        },
+        // For Screen Percentage
+        percentage: {
+          type: 'number',
+          description: 'Screen percentage (10-200).'
+        },
+        // For Ray Tracing
+        globalIllumination: { type: 'boolean', description: 'Enable RT global illumination.' },
+        reflections: { type: 'boolean', description: 'Enable RT reflections.' },
+        shadows: { type: 'boolean', description: 'Enable RT shadows.' },
+        ambientOcclusion: { type: 'boolean', description: 'Enable RT ambient occlusion.' },
+        translucency: { type: 'boolean', description: 'Enable RT translucency.' },
+        // For Post Process
+        actorName: {
+          type: 'string',
+          description: 'PostProcessVolume actor name. If not provided, uses/creates global volume.'
+        },
+        autoExposure: { type: 'boolean', description: 'Enable auto exposure.' },
+        exposureCompensation: { type: 'number', description: 'Exposure compensation EV (-5 to 5).' },
+        bloomIntensity: { type: 'number', description: 'Bloom intensity (0-8).' },
+        vignetteIntensity: { type: 'number', description: 'Vignette intensity (0-1).' },
+        motionBlurAmount: { type: 'number', description: 'Motion blur amount (0-1).' },
+        ambientOcclusionIntensity: { type: 'number', description: 'AO intensity (0-1).' }
+      },
+      required: ['action']
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        message: { type: 'string' },
+        error: { type: 'string' },
+        naniteEnabled: { type: 'boolean' },
+        settings: { type: 'object' },
+        info: { type: 'object' },
+        commandsExecuted: { type: 'array', items: { type: 'string' } },
+        settingsApplied: { type: 'array', items: { type: 'string' } }
+      }
+    }
+  },
+
+  // 20. MATERIAL MANAGEMENT - Phase 7.6
+  {
+    name: 'manage_material',
+    description: `Material Instance creation and parameter management.
+
+Use it when you need to:
+- create a Material Instance from a parent material.
+- set scalar (float), vector (color), or texture parameters.
+- get all parameters from a Material Instance.
+- copy Material Instances with optional overrides.
+
+Supported actions: create_instance, set_scalar, set_vector, set_texture, get_parameters, copy.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action: {
+          type: 'string',
+          enum: ['create_instance', 'set_scalar', 'set_vector', 'set_texture', 'get_parameters', 'copy'],
+          description: 'Material action to perform'
+        },
+        // For create_instance
+        name: {
+          type: 'string',
+          description: 'Name for the new Material Instance. Required for create_instance and copy.'
+        },
+        parentMaterial: {
+          type: 'string',
+          description: 'Content path to parent material (e.g., "/Game/Materials/M_Base"). Required for create_instance.'
+        },
+        savePath: {
+          type: 'string',
+          description: 'Content path where asset will be saved (e.g., "/Game/Materials"). Optional, defaults to /Game/Materials.'
+        },
+        // For parameter operations
+        materialPath: {
+          type: 'string',
+          description: 'Content path to Material Instance for parameter operations. Required for set_scalar, set_vector, set_texture, get_parameters.'
+        },
+        parameterName: {
+          type: 'string',
+          description: 'Name of the parameter to set. Required for set_scalar, set_vector, set_texture.'
+        },
+        // For set_scalar
+        scalarValue: {
+          type: 'number',
+          description: 'Float value for scalar parameter. Required for set_scalar.'
+        },
+        // For set_vector
+        vectorValue: {
+          type: 'object',
+          description: 'Color value for vector parameter. Required for set_vector.',
+          properties: {
+            r: { type: 'number', description: 'Red component (0.0-1.0)' },
+            g: { type: 'number', description: 'Green component (0.0-1.0)' },
+            b: { type: 'number', description: 'Blue component (0.0-1.0)' },
+            a: { type: 'number', description: 'Alpha component (0.0-1.0), optional' }
+          }
+        },
+        // For set_texture
+        texturePath: {
+          type: 'string',
+          description: 'Content path to texture asset. Required for set_texture.'
+        },
+        // For create_instance - batch parameters
+        scalarParameters: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              value: { type: 'number' }
+            }
+          },
+          description: 'Array of scalar parameters to set during creation.'
+        },
+        vectorParameters: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              value: {
+                type: 'object',
+                properties: {
+                  r: { type: 'number' },
+                  g: { type: 'number' },
+                  b: { type: 'number' },
+                  a: { type: 'number' }
+                }
+              }
+            }
+          },
+          description: 'Array of vector parameters to set during creation.'
+        },
+        textureParameters: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              texturePath: { type: 'string' }
+            }
+          },
+          description: 'Array of texture parameters to set during creation.'
+        },
+        // For copy
+        sourcePath: {
+          type: 'string',
+          description: 'Source Material Instance path for copy action.'
+        },
+        overrideScalars: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              value: { type: 'number' }
+            }
+          },
+          description: 'Scalar parameters to override in the copy.'
+        },
+        overrideVectors: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              value: {
+                type: 'object',
+                properties: {
+                  r: { type: 'number' },
+                  g: { type: 'number' },
+                  b: { type: 'number' },
+                  a: { type: 'number' }
+                }
+              }
+            }
+          },
+          description: 'Vector parameters to override in the copy.'
+        }
+      },
+      required: ['action']
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', description: 'Whether the operation succeeded' },
+        path: { type: 'string', description: 'Path to created/modified Material Instance' },
+        parametersSet: { type: 'array', description: 'List of parameters that were set' },
+        scalarParameters: { type: 'array', description: 'Scalar parameters (for get_parameters)' },
+        vectorParameters: { type: 'array', description: 'Vector parameters (for get_parameters)' },
+        textureParameters: { type: 'array', description: 'Texture parameters (for get_parameters)' },
+        message: { type: 'string', description: 'Status message' },
+        error: { type: 'string', description: 'Error message if failed' },
+        warnings: { type: 'array', items: { type: 'string' }, description: 'Warnings during operation' }
+      }
+    }
+  },
+
+  // 20. C++ CLASS MANAGEMENT - Phase 6 Complete
+  {
+    name: 'manage_cpp',
+    description: `C++ class scaffolding tool for generating UE5 C++ boilerplate with proper macros.
+
+Use it when you need to:
+- create a new C++ class (Actor, Character, Pawn, Component, etc.).
+- generate GAS classes (AttributeSet, GameplayAbility, GameplayEffect, ASC on PlayerState).
+- generate CommonUI classes (ActivatableWidget, ButtonBase, Widget Stack, Input Actions).
+- add UPROPERTY/UFUNCTION with replication support.
+- manage Build.cs module dependencies.
+- create DataTables, DataAssets, and project modules.
+
+**C++ First Workflow**: Use this for game logic, Blueprints only for small tweaks.
+**Multiplayer by Default**: All generated code includes replication patterns.
+
+Supported actions: 
+- Class: create_class, add_property, add_function, list_templates
+- GAS: create_gas_playerstate, create_gas_gamemode, create_gameplay_effect
+- CommonUI: create_widget_stack_manager, create_input_action_data_asset
+- Data: create_datatable_struct, create_primary_data_asset
+- Project: add_module_dependency, get_module_dependencies, create_module, get_project_info, enable_plugin`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action: {
+          type: 'string',
+          enum: [
+            'create_class', 'add_property', 'add_function', 'list_templates',
+            'create_gas_playerstate', 'create_gas_gamemode', 'create_gameplay_effect',
+            'create_widget_stack_manager', 'create_input_action_data_asset',
+            'create_datatable_struct', 'create_primary_data_asset',
+            'add_module_dependency', 'get_module_dependencies', 'create_module', 'get_project_info', 'enable_plugin'
+          ],
+          description: 'C++ action to perform'
+        },
+        // For create_class
+        className: {
+          type: 'string',
+          description: 'Name for the C++ class (without prefix like A or U). Required for most actions.'
+        },
+        classType: {
+          type: 'string',
+          enum: [
+            'Actor', 'Character', 'Pawn', 'PlayerController', 'GameMode', 'GameState', 'PlayerState',
+            'ActorComponent', 'SceneComponent', 'Widget', 'DataAsset', 'Subsystem',
+            'AttributeSet', 'GameplayAbility', 'AbilitySystemComponent',
+            'ActivatableWidget', 'ButtonBase'
+          ],
+          description: 'Base class type for the new C++ class. Required for create_class.'
+        },
+        moduleName: {
+          type: 'string',
+          description: 'Module name for the class. Optional, defaults to project name.'
+        },
+        includeReplication: {
+          type: 'boolean',
+          description: 'Include GetLifetimeReplicatedProps override for multiplayer. Default: true.'
+        },
+        interfaces: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Interfaces to implement (e.g., "IAbilitySystemInterface").'
+        },
+        // For add_property
+        property: {
+          type: 'object',
+          description: 'Property definition for add_property action.',
+          properties: {
+            name: { type: 'string', description: 'Property name' },
+            type: { type: 'string', description: 'C++ type (e.g., "float", "FVector", "TObjectPtr<AActor>")' },
+            specifiers: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'UPROPERTY specifiers (e.g., ["EditAnywhere", "BlueprintReadWrite"])'
+            },
+            defaultValue: { type: 'string', description: 'Default value (e.g., "0.f", "FVector::ZeroVector")' },
+            comment: { type: 'string', description: 'Comment for the property' },
+            isReplicated: { type: 'boolean', description: 'Mark as Replicated for multiplayer' },
+            repNotifyFunc: { type: 'string', description: 'RepNotify function name (e.g., "OnRep_Health")' }
+          }
+        },
+        // For add_function
+        function: {
+          type: 'object',
+          description: 'Function definition for add_function action.',
+          properties: {
+            name: { type: 'string', description: 'Function name' },
+            returnType: { type: 'string', description: 'Return type (e.g., "void", "bool", "float")' },
+            parameters: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  name: { type: 'string' },
+                  type: { type: 'string' }
+                }
+              },
+              description: 'Function parameters'
+            },
+            specifiers: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'UFUNCTION specifiers (e.g., ["BlueprintCallable", "Category=MyCategory"])'
+            },
+            isRPC: { type: 'boolean', description: 'Is this a network RPC function?' },
+            rpcType: {
+              type: 'string',
+              enum: ['Server', 'Client', 'NetMulticast'],
+              description: 'RPC type for multiplayer'
+            },
+            isReliable: { type: 'boolean', description: 'Reliable RPC (guaranteed delivery). Default: true' },
+            hasValidation: { type: 'boolean', description: 'Include validation function for Server RPCs' },
+            body: { type: 'string', description: 'Function body implementation' },
+            comment: { type: 'string', description: 'Comment for the function' }
+          }
+        },
+        // For GAS
+        attributeSetClass: {
+          type: 'string',
+          description: 'Attribute set class name for GAS PlayerState.'
+        },
+        abilities: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Default ability classes to grant'
+        },
+        defaultPawnClass: { type: 'string', description: 'Default pawn class for GameMode' },
+        playerControllerClass: { type: 'string', description: 'PlayerController class for GameMode' },
+        playerStateClass: { type: 'string', description: 'PlayerState class for GameMode' },
+        gameStateClass: { type: 'string', description: 'GameState class for GameMode' },
+        // For GameplayEffect
+        durationType: {
+          type: 'string',
+          enum: ['Instant', 'Infinite', 'HasDuration'],
+          description: 'Duration type for GameplayEffect'
+        },
+        durationMagnitude: { type: 'number', description: 'Duration in seconds for HasDuration effects' },
+        modifiers: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              attribute: { type: 'string' },
+              operation: { type: 'string', enum: ['Add', 'Multiply', 'Override'] },
+              magnitude: { type: 'number' }
+            }
+          },
+          description: 'Attribute modifiers for GameplayEffect'
+        },
+        tags: {
+          type: 'object',
+          properties: {
+            assetTags: { type: 'array', items: { type: 'string' } },
+            grantedTags: { type: 'array', items: { type: 'string' } },
+            applicationRequiredTags: { type: 'array', items: { type: 'string' } },
+            removalTags: { type: 'array', items: { type: 'string' } }
+          },
+          description: 'Gameplay tags for GameplayEffect'
+        },
+        // For DataTable
+        fields: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              type: { type: 'string' },
+              displayName: { type: 'string' },
+              category: { type: 'string' }
+            }
+          },
+          description: 'Fields for DataTable struct'
+        },
+        assetType: { type: 'string', description: 'Asset type identifier for PrimaryDataAsset' },
+        // For Module/Project management
+        dependencies: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Module dependencies to add (e.g., ["GameplayAbilities", "GameplayTags"])'
+        },
+        isPublic: { type: 'boolean', description: 'Add as public dependency (default: private)' },
+        moduleType: {
+          type: 'string',
+          enum: ['Runtime', 'Editor', 'UncookedOnly'],
+          description: 'Module type for create_module'
+        },
+        loadingPhase: {
+          type: 'string',
+          enum: ['Default', 'PreDefault', 'PostConfigInit', 'PreLoadingScreen'],
+          description: 'Module loading phase'
+        },
+        pluginName: { type: 'string', description: 'Plugin name for enable_plugin' },
+        enabled: { type: 'boolean', description: 'Enable or disable plugin' }
+      },
+      required: ['action']
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', description: 'Whether the operation succeeded' },
+        message: { type: 'string', description: 'Status message' },
+        headerPath: { type: 'string', description: 'Path to generated .h file' },
+        sourcePath: { type: 'string', description: 'Path to generated .cpp file' },
+        headerContent: { type: 'string', description: 'Generated header file content' },
+        sourceContent: { type: 'string', description: 'Generated source file content' },
+        content: { type: 'string', description: 'Generated content (for single-file outputs)' },
+        buildCsPath: { type: 'string', description: 'Path to Build.cs file' },
+        publicDeps: { type: 'array', items: { type: 'string' }, description: 'Public dependencies' },
+        privateDeps: { type: 'array', items: { type: 'string' }, description: 'Private dependencies' },
+        projectName: { type: 'string', description: 'Project name' },
+        engineVersion: { type: 'string', description: 'Engine version' },
+        modules: { type: 'array', items: { type: 'object' }, description: 'Project modules' },
+        plugins: { type: 'array', items: { type: 'object' }, description: 'Project plugins' },
+        templates: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              parentClass: { type: 'string' },
+              module: { type: 'string' }
+            }
+          },
+          description: 'Available class templates (for list_templates)'
+        },
+        error: { type: 'string', description: 'Error message if failed' }
+      }
+    }
+  },
+
+  // 23. COLLISION MANAGEMENT
+  {
+    name: 'manage_collision',
+    description: `Collision preset and channel configuration for actors.
+
+Use it when you need to:
+- set collision profile presets on actors (BlockAll, OverlapAll, Pawn, etc.).
+- configure collision response to specific channels.
+- enable/disable collision on actors.
+- query current collision settings.
+
+Supported actions: set_profile, set_response, set_enabled, get_settings.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action: {
+          type: 'string',
+          enum: ['set_profile', 'set_response', 'set_enabled', 'get_settings'],
+          description: 'Collision action to perform'
+        },
+        actorName: {
+          type: 'string',
+          description: 'Actor label/name to configure collision for. Required for all actions.'
+        },
+        profile: {
+          type: 'string',
+          description: 'Collision profile preset name (e.g., "BlockAll", "OverlapAll", "Pawn", "NoCollision"). Required for set_profile action.'
+        },
+        channel: {
+          type: 'string',
+          enum: ['WorldStatic', 'WorldDynamic', 'Pawn', 'Visibility', 'Camera', 'PhysicsBody', 'Vehicle', 'Destructible'],
+          description: 'Collision channel to configure response for. Required for set_response action.'
+        },
+        response: {
+          type: 'string',
+          enum: ['Ignore', 'Overlap', 'Block'],
+          description: 'Collision response type. Required for set_response action.'
+        },
+        enabled: {
+          type: 'boolean',
+          description: 'Enable or disable collision. Required for set_enabled action.'
+        },
+        type: {
+          type: 'string',
+          enum: ['NoCollision', 'QueryOnly', 'PhysicsOnly', 'QueryAndPhysics'],
+          description: 'Collision enabled type. Optional for set_enabled, defaults based on enabled flag.'
+        }
+      },
+      required: ['action']
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', description: 'Whether the operation succeeded' },
+        message: { type: 'string', description: 'Status message' },
+        profile: { type: 'string', description: 'Current or set collision profile' },
+        collisionEnabled: { type: 'string', description: 'Collision enabled state' },
+        objectType: { type: 'string', description: 'Collision object type' },
+        error: { type: 'string', description: 'Error message if failed' }
       }
     }
   }

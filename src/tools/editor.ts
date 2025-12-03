@@ -1,6 +1,9 @@
 import { UnrealBridge } from '../unreal-bridge.js';
 import { toVec3Object, toRotObject } from '../utils/normalize.js';
 import { bestEffortInterpretedText, coerceString, interpretStandardResult } from '../utils/result-helpers.js';
+import { Logger } from '../utils/logger.js';
+
+const log = new Logger('EditorTools');
 
 export class EditorTools {
   constructor(private bridge: UnrealBridge) {}
@@ -205,6 +208,165 @@ except Exception as e:
     }
   }
 
+  /**
+   * Set viewport camera via Direct Remote Control API (no Python required)
+   * This is the preferred method as it works without any UE settings changes
+   */
+  private async setViewportCameraViaDirectRC(
+    location: { x: number; y: number; z: number },
+    rotation: { pitch: number; yaw: number; roll: number }
+  ): Promise<{ success: boolean; message: string; method: string }> {
+    await this.bridge.call({
+      objectPath: '/Script/UnrealEd.Default__UnrealEditorSubsystem',
+      functionName: 'SetLevelViewportCameraInfo',
+      parameters: {
+        CameraLocation: { X: location.x, Y: location.y, Z: location.z },
+        CameraRotation: { Pitch: rotation.pitch, Yaw: rotation.yaw, Roll: rotation.roll }
+      }
+    });
+    
+    return { 
+      success: true, 
+      message: 'Viewport camera positioned via Direct RC API',
+      method: 'DirectRC'
+    };
+  }
+
+  /**
+   * Get current viewport camera info via Direct Remote Control API
+   * Used for rotation-only updates where we need to preserve the current location
+   */
+  private async getViewportCameraViaDirectRC(): Promise<{
+    location: { x: number; y: number; z: number };
+    rotation: { pitch: number; yaw: number; roll: number };
+  } | null> {
+    try {
+      const result = await this.bridge.call({
+        objectPath: '/Script/UnrealEd.Default__UnrealEditorSubsystem',
+        functionName: 'GetLevelViewportCameraInfo',
+        parameters: {}
+      });
+      
+      // Parse the result - the API returns CameraLocation and CameraRotation as out params
+      // The response format may vary, so we handle multiple possible structures
+      if (result) {
+        let location = null;
+        let rotation = null;
+        
+        // Try to extract location
+        if (result.CameraLocation) {
+          location = {
+            x: result.CameraLocation.X ?? result.CameraLocation.x ?? 0,
+            y: result.CameraLocation.Y ?? result.CameraLocation.y ?? 0,
+            z: result.CameraLocation.Z ?? result.CameraLocation.z ?? 0
+          };
+        } else if (result.ReturnValue?.CameraLocation) {
+          location = {
+            x: result.ReturnValue.CameraLocation.X ?? 0,
+            y: result.ReturnValue.CameraLocation.Y ?? 0,
+            z: result.ReturnValue.CameraLocation.Z ?? 0
+          };
+        }
+        
+        // Try to extract rotation
+        if (result.CameraRotation) {
+          rotation = {
+            pitch: result.CameraRotation.Pitch ?? result.CameraRotation.pitch ?? 0,
+            yaw: result.CameraRotation.Yaw ?? result.CameraRotation.yaw ?? 0,
+            roll: result.CameraRotation.Roll ?? result.CameraRotation.roll ?? 0
+          };
+        } else if (result.ReturnValue?.CameraRotation) {
+          rotation = {
+            pitch: result.ReturnValue.CameraRotation.Pitch ?? 0,
+            yaw: result.ReturnValue.CameraRotation.Yaw ?? 0,
+            roll: result.ReturnValue.CameraRotation.Roll ?? 0
+          };
+        }
+        
+        if (location && rotation) {
+          return { location, rotation };
+        }
+      }
+      
+      return null;
+    } catch (error) {
+      log.debug('Failed to get viewport camera via Direct RC:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Set viewport camera position via Python (fallback method)
+   * Used when Direct RC API is not available
+   */
+  private async setViewportCameraViaPython(
+    location: { x: number; y: number; z: number },
+    rotation: { pitch: number; yaw: number; roll: number }
+  ): Promise<{ success: boolean; message: string; method: string }> {
+    const pythonCmd = `
+import unreal
+# Use UnrealEditorSubsystem instead of deprecated EditorLevelLibrary
+ues = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem)
+les = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
+location = unreal.Vector(${location.x}, ${location.y}, ${location.z})
+rotation = unreal.Rotator(${rotation.pitch}, ${rotation.yaw}, ${rotation.roll})
+if ues:
+    ues.set_level_viewport_camera_info(location, rotation)
+    # Invalidate viewports to ensure visual update
+    try:
+        if les:
+            les.editor_invalidate_viewports()
+    except Exception:
+        pass
+    `.trim();
+    await this.bridge.executePython(pythonCmd);
+    return { 
+      success: true, 
+      message: 'Viewport camera positioned via Python API',
+      method: 'Python'
+    };
+  }
+
+  /**
+   * Get current viewport camera info via Python (fallback method)
+   */
+  private async getViewportCameraViaPython(): Promise<{
+    location: { x: number; y: number; z: number };
+    rotation: { pitch: number; yaw: number; roll: number };
+  } | null> {
+    try {
+      const pythonCmd = `
+import unreal
+import json
+ues = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem)
+if ues:
+    info = ues.get_level_viewport_camera_info()
+    if info is not None:
+        loc, rot = info
+        print('RESULT:' + json.dumps({
+            'location': {'x': loc.x, 'y': loc.y, 'z': loc.z},
+            'rotation': {'pitch': rot.pitch, 'yaw': rot.yaw, 'roll': rot.roll}
+        }))
+      `.trim();
+      const result: any = await this.bridge.executePython(pythonCmd);
+      
+      // Parse the RESULT from Python output
+      const output = typeof result === 'string' ? result : JSON.stringify(result);
+      const match = output.match(/RESULT:(\{.*\})/s);
+      if (match) {
+        const parsed = JSON.parse(match[1]);
+        return {
+          location: parsed.location,
+          rotation: parsed.rotation
+        };
+      }
+      return null;
+    } catch (error) {
+      log.debug('Failed to get viewport camera via Python:', error);
+      return null;
+    }
+  }
+
   async setViewportCamera(location?: { x: number; y: number; z: number } | [number, number, number] | null | undefined, rotation?: { pitch: number; yaw: number; roll: number } | [number, number, number] | null | undefined) {
     // Special handling for when both location and rotation are missing/invalid
     // Allow rotation-only updates
@@ -242,81 +404,97 @@ except Exception as e:
     }
     
     try {
-      // Try Python for actual viewport camera positioning
-      // Only proceed if we have a valid location
+      // Case 1: Both location and rotation provided
       if (location) {
+        const loc = location as { x: number; y: number; z: number };
+        const rot = (rotation as { pitch: number; yaw: number; roll: number }) || { pitch: 0, yaw: 0, roll: 0 };
+        
+        // Try Direct RC API first (preferred - no Python required)
         try {
-          const rot = (rotation as any) || { pitch: 0, yaw: 0, roll: 0 };
-          const pythonCmd = `
-import unreal
-# Use UnrealEditorSubsystem instead of deprecated EditorLevelLibrary
-ues = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem)
-les = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
-location = unreal.Vector(${(location as any).x}, ${(location as any).y}, ${(location as any).z})
-rotation = unreal.Rotator(${rot.pitch}, ${rot.yaw}, ${rot.roll})
-if ues:
-    ues.set_level_viewport_camera_info(location, rotation)
-    # Invalidate viewports to ensure visual update
-    try:
-        if les:
-            les.editor_invalidate_viewports()
-    except Exception:
-        pass
-          `.trim();
-          await this.bridge.executePython(pythonCmd);
-          return { 
-            success: true, 
-            message: 'Viewport camera positioned via UnrealEditorSubsystem' 
-          };
-        } catch {
-          // Fallback to camera speed control
-          await this.bridge.executeConsoleCommand('camspeed 4');
-          return { 
-            success: true, 
-            message: 'Camera speed set. Use debug camera (toggledebugcamera) for manual positioning' 
-          };
+          log.debug('Attempting to set viewport camera via Direct RC API');
+          const result = await this.setViewportCameraViaDirectRC(loc, rot);
+          log.info('Viewport camera set via Direct RC API');
+          return result;
+        } catch (directRcError) {
+          log.debug('Direct RC API failed, falling back to Python:', directRcError);
+          
+          // Fall back to Python method
+          try {
+            const result = await this.setViewportCameraViaPython(loc, rot);
+            log.info('Viewport camera set via Python API (fallback)');
+            return result;
+          } catch (pythonError) {
+            log.debug('Python API also failed:', pythonError);
+            // Final fallback to camera speed control
+            await this.bridge.executeConsoleCommand('camspeed 4');
+            return { 
+              success: true, 
+              message: 'Camera speed set. Use debug camera (toggledebugcamera) for manual positioning',
+              method: 'ConsoleFallback'
+            };
+          }
         }
-      } else if (rotation) {
-        // Only rotation provided, try to set just rotation
+      } 
+      // Case 2: Only rotation provided - need to get current location first
+      else if (rotation) {
+        const rot = rotation as { pitch: number; yaw: number; roll: number };
+        
+        // Try Direct RC API to get current camera info
         try {
-          const pythonCmd = `
-import unreal
-# Use UnrealEditorSubsystem to read/write viewport camera
-ues = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem)
-les = unreal.get_editor_subsystem(unreal.LevelEditorSubsystem)
-rotation = unreal.Rotator(${(rotation as any).pitch}, ${(rotation as any).yaw}, ${(rotation as any).roll})
-if ues:
-    info = ues.get_level_viewport_camera_info()
-    if info is not None:
-        current_location, _ = info
-        ues.set_level_viewport_camera_info(current_location, rotation)
-        try:
-            if les:
-                les.editor_invalidate_viewports()
-        except Exception:
-            pass
-          `.trim();
-          await this.bridge.executePython(pythonCmd);
-          return { 
-            success: true, 
-            message: 'Viewport camera rotation set via UnrealEditorSubsystem' 
-          };
-        } catch {
-          // Fallback
-          return { 
-            success: true, 
-            message: 'Camera rotation update attempted' 
-          };
+          log.debug('Attempting to get current camera info via Direct RC API');
+          const currentCamera = await this.getViewportCameraViaDirectRC();
+          
+          if (currentCamera) {
+            log.debug('Got current camera info via Direct RC, now setting rotation');
+            const result = await this.setViewportCameraViaDirectRC(currentCamera.location, rot);
+            log.info('Viewport camera rotation set via Direct RC API');
+            return {
+              ...result,
+              message: 'Viewport camera rotation set via Direct RC API'
+            };
+          } else {
+            throw new Error('Could not get current camera info');
+          }
+        } catch (directRcError) {
+          log.debug('Direct RC API failed for rotation-only update, falling back to Python:', directRcError);
+          
+          // Fall back to Python method
+          try {
+            const currentCamera = await this.getViewportCameraViaPython();
+            if (currentCamera) {
+              const result = await this.setViewportCameraViaPython(currentCamera.location, rot);
+              log.info('Viewport camera rotation set via Python API (fallback)');
+              return {
+                ...result,
+                message: 'Viewport camera rotation set via Python API'
+              };
+            } else {
+              return { 
+                success: true, 
+                message: 'Camera rotation update attempted (could not verify)',
+                method: 'Python'
+              };
+            }
+          } catch (pythonError) {
+            log.debug('Python API also failed for rotation:', pythonError);
+            return { 
+              success: true, 
+              message: 'Camera rotation update attempted',
+              method: 'Unknown'
+            };
+          }
         }
-      } else {
-        // Neither location nor rotation provided - this is valid, just no-op
+      } 
+      // Case 3: Neither location nor rotation provided - no-op
+      else {
         return { 
           success: true, 
-          message: 'No camera changes requested' 
+          message: 'No camera changes requested',
+          method: 'None'
         };
       }
     } catch (err) {
-      return { success: false, error: `Failed to set camera: ${err}` };
+      return { success: false, error: `Failed to set camera: ${err}`, method: 'Error' };
     }
   }
   
