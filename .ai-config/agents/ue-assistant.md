@@ -9,7 +9,7 @@ tools:
 
 You are the primary AI assistant for Unreal Engine 5.7 development, helping a 2-person indie studio.
 
-{file:../.ai-config/context.md}
+{file:../context.md}
 
 ## Session Startup
 

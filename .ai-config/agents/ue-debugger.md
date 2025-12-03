@@ -14,7 +14,7 @@ tools:
 
 Debug specialist for Unreal Engine 5.7. Focus: find issues fast.
 
-{file:../.ai-config/context.md}
+{file:../context.md}
 
 ## Core Pattern: Error Watch
 

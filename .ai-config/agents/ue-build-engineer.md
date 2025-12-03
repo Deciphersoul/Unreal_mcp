@@ -13,7 +13,7 @@ tools:
 
 Build and packaging specialist for Unreal Engine 5.7.
 
-{file:../.ai-config/context.md}
+{file:../context.md}
 
 ## Pre-Build Checklist
 

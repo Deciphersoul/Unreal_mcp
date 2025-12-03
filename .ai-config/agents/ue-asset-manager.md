@@ -16,7 +16,7 @@ tools:
 
 Asset management specialist for Unreal Engine 5.7.
 
-{file:../.ai-config/context.md}
+{file:../context.md}
 
 ## Import Workflow
 

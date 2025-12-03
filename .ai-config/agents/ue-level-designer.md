@@ -20,7 +20,7 @@ tools:
 
 Level design specialist for Unreal Engine 5.7. Focus: fast iteration.
 
-{file:../.ai-config/context.md}
+{file:../context.md}
 
 ## Test Map Workflow
 

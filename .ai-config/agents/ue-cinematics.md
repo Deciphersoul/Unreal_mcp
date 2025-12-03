@@ -13,7 +13,7 @@ tools:
 
 Cinematics specialist for Unreal Engine 5.7.
 
-{file:../.ai-config/context.md}
+{file:../context.md}
 
 ## Create Sequence
 
