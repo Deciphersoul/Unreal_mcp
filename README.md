@@ -20,6 +20,17 @@ A comprehensive Model Context Protocol (MCP) server that enables AI assistants t
 - **Sequencer** - Cinematics, camera animations, and timeline control
 - **Console Commands** - Safe execution with dangerous command filtering
 
+### Advanced Development Tools
+- **C++ Workflow** - Full C++ class scaffolding with 17 templates (Actor, Character, GAS, CommonUI)
+- **Multiplayer by Default** - All generated code includes replication patterns (Server RPCs, DOREPLIFETIME)
+- **Gameplay Ability System** - GAS on PlayerState pattern (recommended for multiplayer)
+- **UE5 Rendering** - Nanite, Lumen, Virtual Shadow Maps, ray tracing control
+- **Enhanced Input** - UE5 InputActions and MappingContexts management
+- **Material Instances** - Create and parameterize Material Instances
+- **Collision Configuration** - Collision profiles and channel responses
+- **Project Packaging** - Build validation, cooking, and Windows deployment
+- **Debugging & Logs** - Error watching, log analysis, connection monitoring
+
 ## Quick Start
 
 ### Prerequisites
@@ -132,7 +143,7 @@ Then enable Python execution in: Edit > Project Settings > Plugins > Remote Cont
 }
 ```
 
-## Available Tools (13)
+## Available Tools (23)
 
 | Tool | Description |
 |------|-------------|
@@ -149,6 +160,16 @@ Then enable Python execution in: Edit > Project Settings > Plugins > Remote Cont
 | `manage_rc` | Remote Control presets |
 | `manage_sequence` | Sequencer/cinematics |
 | `inspect` | Object introspection |
+| `query_level` | Level actor queries and counting |
+| `manage_selection` | Actor selection control |
+| `debug_extended` | Enhanced debugging with error watching |
+| `editor_lifecycle` | Editor state management and saving |
+| `project_build` | Project packaging and build tools |
+| `manage_cpp` | C++ class scaffolding for UE5 (17 templates) |
+| `manage_material` | Material Instance creation and parameter management |
+| `manage_rendering` | UE5 rendering control (Nanite, Lumen, VSM, ray tracing) |
+| `manage_input` | UE5 Enhanced Input System (InputActions, MappingContexts) |
+| `manage_collision` | Collision preset and channel configuration |
 
 ## Key Features
 
