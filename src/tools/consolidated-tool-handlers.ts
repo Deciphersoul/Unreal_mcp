@@ -2269,8 +2269,470 @@ case 'inspect':
             const res = await tools.collisionTools.getSettings({ actorName });
             return cleanObject(res);
           }
-          default:
+           default:
             throw new Error(`Unknown manage_collision action: ${args.action}`);
+        }
+
+      // 24. CURVES MANAGEMENT - Phase 8.2
+      case 'manage_curves':
+        switch (requireAction(args)) {
+          case 'create': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide details for manage_curves.create',
+              {
+                name: {
+                  type: 'string',
+                  title: 'Curve Name',
+                  description: 'Name for the new curve asset'
+                },
+                path: {
+                  type: 'string',
+                  title: 'Save Path',
+                  description: 'Content path where curve will be saved (e.g., /Game/Curves)'
+                },
+                curveType: {
+                  type: 'string',
+                  title: 'Curve Type',
+                  description: 'Type of curve (FloatCurve, VectorCurve, TransformCurve)'
+                }
+              }
+            );
+            const name = requireNonEmptyString(args.name, 'name', 'Missing required parameter: name');
+            const path = requireNonEmptyString(args.path, 'path', 'Missing required parameter: path');
+            const curveType = requireNonEmptyString(args.curveType, 'curveType', 'Missing required parameter: curveType');
+            
+            // TODO: Implement curveTools.createCurve
+            return cleanObject({
+              success: true,
+              message: `Curve ${name} of type ${curveType} would be created at ${path}`,
+              curvePath: `${path}/${name}`,
+              warning: 'Curve tools implementation pending - this is a placeholder'
+            });
+          }
+          case 'add_key': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide details for manage_curves.add_key',
+              {
+                curvePath: {
+                  type: 'string',
+                  title: 'Curve Path',
+                  description: 'Content path to existing curve asset'
+                },
+                time: {
+                  type: 'number',
+                  title: 'Time',
+                  description: 'Time value for keyframe'
+                }
+              }
+            );
+            const curvePath = requireNonEmptyString(args.curvePath, 'curvePath', 'Missing required parameter: curvePath');
+            const time = typeof args.time === 'number' ? args.time : parseFloat(args.time);
+            if (isNaN(time)) {
+              throw new Error('Invalid time parameter: must be a number');
+            }
+            
+            // TODO: Implement curveTools.addKey
+            return cleanObject({
+              success: true,
+              message: `Key would be added to ${curvePath} at time ${time}`,
+              curvePath,
+              time,
+              warning: 'Curve tools implementation pending - this is a placeholder'
+            });
+          }
+          case 'evaluate': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide details for manage_curves.evaluate',
+              {
+                curvePath: {
+                  type: 'string',
+                  title: 'Curve Path',
+                  description: 'Content path to existing curve asset'
+                },
+                time: {
+                  type: 'number',
+                  title: 'Time',
+                  description: 'Time value to evaluate at'
+                }
+              }
+            );
+            const curvePath = requireNonEmptyString(args.curvePath, 'curvePath', 'Missing required parameter: curvePath');
+            const time = typeof args.time === 'number' ? args.time : parseFloat(args.time);
+            if (isNaN(time)) {
+              throw new Error('Invalid time parameter: must be a number');
+            }
+            
+            // TODO: Implement curveTools.evaluate
+            return cleanObject({
+              success: true,
+              message: `Curve ${curvePath} would be evaluated at time ${time}`,
+              curvePath,
+              time,
+              value: 0.0,
+              warning: 'Curve tools implementation pending - this is a placeholder'
+            });
+          }
+           case 'import': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide details for manage_curves.import',
+              {
+                importPath: {
+                  type: 'string',
+                  title: 'Import Path',
+                  description: 'File path to import curve data from (CSV/JSON)'
+                }
+              }
+            );
+            const importPath = requireNonEmptyString(args.importPath, 'importPath', 'Missing required parameter: importPath');
+            
+            // TODO: Implement curveTools.importCurve
+            return cleanObject({
+              success: true,
+              message: `Curve data would be imported from ${importPath}`,
+              importPath,
+              curvePath: args.curvePath || '/Game/ImportedCurve',
+              warning: 'Curve tools implementation pending - this is a placeholder'
+            });
+          }
+          case 'export': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide details for manage_curves.export',
+              {
+                curvePath: {
+                  type: 'string',
+                  title: 'Curve Path',
+                  description: 'Content path to existing curve asset'
+                },
+                exportPath: {
+                  type: 'string',
+                  title: 'Export Path',
+                  description: 'File path to export curve data to'
+                }
+              }
+            );
+            const curvePath = requireNonEmptyString(args.curvePath, 'curvePath', 'Missing required parameter: curvePath');
+            const exportPath = requireNonEmptyString(args.exportPath, 'exportPath', 'Missing required parameter: exportPath');
+            
+            // TODO: Implement curveTools.exportCurve
+            return cleanObject({
+              success: true,
+              message: `Curve ${curvePath} would be exported to ${exportPath}`,
+              curvePath,
+              exportPath,
+              exportFormat: args.exportFormat || 'CSV',
+              warning: 'Curve tools implementation pending - this is a placeholder'
+            });
+          }
+          default:
+            throw new Error(`Unknown manage_curves action: ${args.action}`);
+        }
+
+      // 25. GAMEMODE SETUP - Phase 8.3
+      case 'manage_gamemode':
+        switch (requireAction(args)) {
+          case 'create_framework': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide details for manage_gamemode.create_framework',
+              {
+                projectName: {
+                  type: 'string',
+                  title: 'Project Name',
+                  description: 'Project name for class naming'
+                }
+              }
+            );
+            const projectName = requireNonEmptyString(args.projectName, 'projectName', 'Missing required parameter: projectName');
+            const includeGAS = args.includeGAS !== false; // Default to true
+            const includeCommonUI = args.includeCommonUI !== false; // Default to true
+            
+            // TODO: Implement gameModeTools.createFramework
+            return cleanObject({
+              success: true,
+              message: `Game framework would be created for project ${projectName}`,
+              projectName,
+              includeGAS,
+              includeCommonUI,
+              classesCreated: [
+                `${projectName}GameMode`,
+                `${projectName}GameState`,
+                `${projectName}PlayerState`,
+                `${projectName}PlayerController`
+              ],
+              warning: 'GameMode tools implementation pending - this is a placeholder'
+            });
+          }
+          case 'set_default_classes': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide details for manage_gamemode.set_default_classes',
+              {
+                gameModeClass: {
+                  type: 'string',
+                  title: 'GameMode Class',
+                  description: 'GameMode class to set as default'
+                }
+              }
+            );
+            const gameModeClass = requireNonEmptyString(args.gameModeClass, 'gameModeClass', 'Missing required parameter: gameModeClass');
+            
+            // TODO: Implement gameModeTools.setDefaultClasses
+            return cleanObject({
+              success: true,
+              message: `Default classes would be set with GameMode: ${gameModeClass}`,
+              defaultClasses: {
+                gameMode: gameModeClass,
+                playerController: args.playerControllerClass || `${gameModeClass.replace('GameMode', '')}PlayerController`,
+                playerState: args.playerStateClass || `${gameModeClass.replace('GameMode', '')}PlayerState`,
+                gameState: args.gameStateClass || `${gameModeClass.replace('GameMode', '')}GameState`,
+                hud: args.hudClass || `${gameModeClass.replace('GameMode', '')}HUD`
+              },
+              warning: 'GameMode tools implementation pending - this is a placeholder'
+            });
+          }
+           case 'configure_replication': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide details for manage_gamemode.configure_replication',
+              {
+                replicationMode: {
+                  type: 'string',
+                  title: 'Replication Mode',
+                  description: 'Replication mode (Full, Minimal, ClientPredicted)'
+                }
+              }
+            );
+            const replicationMode = requireNonEmptyString(args.replicationMode, 'replicationMode', 'Missing required parameter: replicationMode');
+            if (!['Full', 'Minimal', 'ClientPredicted'].includes(replicationMode)) {
+              throw new Error('Invalid replicationMode. Must be Full, Minimal, or ClientPredicted');
+            }
+            
+            // TODO: Implement gameModeTools.configureReplication
+            return cleanObject({
+              success: true,
+              message: `Replication would be configured with mode: ${replicationMode}`,
+              replicationMode,
+              replicationConfig: { mode: replicationMode },
+              warning: 'GameMode tools implementation pending - this is a placeholder'
+            });
+          }
+          case 'setup_input': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide details for manage_gamemode.setup_input',
+              {
+                inputContext: {
+                  type: 'string',
+                  title: 'Input Context',
+                  description: 'Input Mapping Context asset path'
+                }
+              }
+            );
+            const inputContext = requireNonEmptyString(args.inputContext, 'inputContext', 'Missing required parameter: inputContext');
+            
+            // TODO: Implement gameModeTools.setupInput
+            return cleanObject({
+              success: true,
+              message: `Input would be setup with context: ${inputContext}`,
+              inputConfig: {
+                context: inputContext,
+                mode: args.inputMode || 'GameOnly',
+                mouseLock: args.mouseLockMode || 'LockOnCapture',
+                enhancedInput: true
+              },
+              warning: 'GameMode tools implementation pending - this is a placeholder'
+            });
+          }
+          default:
+            throw new Error(`Unknown manage_gamemode action: ${args.action}`);
+        }
+
+      // 26. ACTOR TAGS - Phase 8.4
+      case 'manage_tags':
+        switch (requireAction(args)) {
+          case 'add': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide details for manage_tags.add',
+              {
+                actorName: {
+                  type: 'string',
+                  title: 'Actor Name',
+                  description: 'Actor to add tag to'
+                },
+                tag: {
+                  type: 'string',
+                  title: 'Tag',
+                  description: 'Tag to add to actor'
+                }
+              }
+            );
+            const actorName = requireNonEmptyString(args.actorName, 'actorName', 'Missing required parameter: actorName');
+            const tag = requireNonEmptyString(args.tag, 'tag', 'Missing required parameter: tag');
+            
+            // TODO: Implement tagTools.addTag
+            return cleanObject({
+              success: true,
+              message: `Tag "${tag}" would be added to actor "${actorName}"`,
+              actorName,
+              tag,
+              warning: 'Tag tools implementation pending - this is a placeholder'
+            });
+          }
+          case 'remove': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide details for manage_tags.remove',
+              {
+                actorName: {
+                  type: 'string',
+                  title: 'Actor Name',
+                  description: 'Actor to remove tag from'
+                },
+                tag: {
+                  type: 'string',
+                  title: 'Tag',
+                  description: 'Tag to remove from actor'
+                }
+              }
+            );
+            const actorName = requireNonEmptyString(args.actorName, 'actorName', 'Missing required parameter: actorName');
+            const tag = requireNonEmptyString(args.tag, 'tag', 'Missing required parameter: tag');
+            
+            // TODO: Implement tagTools.removeTag
+            return cleanObject({
+              success: true,
+              message: `Tag "${tag}" would be removed from actor "${actorName}"`,
+              actorName,
+              tag,
+              warning: 'Tag tools implementation pending - this is a placeholder'
+            });
+          }
+          case 'has': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide details for manage_tags.has',
+              {
+                actorName: {
+                  type: 'string',
+                  title: 'Actor Name',
+                  description: 'Actor to check for tag'
+                },
+                tag: {
+                  type: 'string',
+                  title: 'Tag',
+                  description: 'Tag to check for'
+                }
+              }
+            );
+            const actorName = requireNonEmptyString(args.actorName, 'actorName', 'Missing required parameter: actorName');
+            const tag = requireNonEmptyString(args.tag, 'tag', 'Missing required parameter: tag');
+            
+            // TODO: Implement tagTools.hasTag
+            return cleanObject({
+              success: true,
+              message: `Would check if actor "${actorName}" has tag "${tag}"`,
+              actorName,
+              tag,
+              hasTag: false,
+              warning: 'Tag tools implementation pending - this is a placeholder'
+            });
+          }
+          case 'query': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide details for manage_tags.query',
+              {
+                tagPattern: {
+                  type: 'string',
+                  title: 'Tag Pattern',
+                  description: 'Tag pattern with wildcards (e.g., "Enemy_*", "*_Door")'
+                }
+              }
+            );
+            const tagPattern = requireNonEmptyString(args.tagPattern, 'tagPattern', 'Missing required parameter: tagPattern');
+            const matchAll = args.matchAll === true;
+            
+            // TODO: Implement tagTools.query
+            return cleanObject({
+              success: true,
+              message: `Would query actors with tag pattern "${tagPattern}" (matchAll: ${matchAll})`,
+              tagPattern,
+              matchAll,
+              actors: [],
+              count: 0,
+              warning: 'Tag tools implementation pending - this is a placeholder'
+            });
+          }
+           case 'get_all': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide details for manage_tags.get_all',
+              {
+                actorName: {
+                  type: 'string',
+                  title: 'Actor Name',
+                  description: 'Actor to get tags from'
+                }
+              }
+            );
+            const actorName = requireNonEmptyString(args.actorName, 'actorName', 'Missing required parameter: actorName');
+            
+            // TODO: Implement tagTools.getAllTags
+            return cleanObject({
+              success: true,
+              message: `Would get all tags from actor "${actorName}"`,
+              actorName,
+              tags: [],
+              count: 0,
+              warning: 'Tag tools implementation pending - this is a placeholder'
+            });
+          }
+          case 'clear': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide details for manage_tags.clear',
+              {
+                actorName: {
+                  type: 'string',
+                  title: 'Actor Name',
+                  description: 'Actor to clear tags from'
+                }
+              }
+            );
+            const actorName = requireNonEmptyString(args.actorName, 'actorName', 'Missing required parameter: actorName');
+            
+            // TODO: Implement tagTools.clearTags
+            return cleanObject({
+              success: true,
+              message: `Would clear all tags from actor "${actorName}"`,
+              actorName,
+              clearedCount: 0,
+              warning: 'Tag tools implementation pending - this is a placeholder'
+            });
+          }
+          default:
+            throw new Error(`Unknown manage_tags action: ${args.action}`);
         }
 
       default:

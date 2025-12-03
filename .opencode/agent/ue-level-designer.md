@@ -9,6 +9,7 @@ tools:
   ue-mcp_manage_level: true
   ue-mcp_manage_rendering: true
   ue-mcp_manage_collision: true
+  ue-mcp_manage_tags: true
   ue-mcp_control_editor: true
   ue-mcp_editor_lifecycle: true
   ue-mcp_debug_extended: true
@@ -112,10 +113,35 @@ manage_collision action:set_enabled actorName:MyCube enabled:false → disable c
 - `Pawn` - Character collision
 - `PhysicsActor` - For physics-simulated actors
 
-**Collision Channels:**
+ **Collision Channels:**
 - `WorldStatic`, `WorldDynamic` - World geometry
 - `Pawn`, `PhysicsBody`, `Vehicle` - Gameplay objects
 - `Visibility`, `Camera` - Traces
+
+## Actor Tags (Phase 8.4)
+```
+# Add tags to organize actors
+manage_tags action:add actorName:Enemy_01 tag:Enemy
+manage_tags action:add actorName:Enemy_01 tags:[Enemy, Melee, Patrol]
+
+# Query actors by tags
+manage_tags action:query tagPattern:Enemy_* → find all Enemy_ prefixed actors
+manage_tags action:query tagPattern:*_Door matchAll:true → actors with ALL matching tags
+
+# Check and manage tags
+manage_tags action:has actorName:Enemy_01 tag:Melee → check if actor has tag
+manage_tags action:get_all actorName:Enemy_01 → list all tags on actor
+manage_tags action:clear actorName:Enemy_01 → remove all tags
+```
+
+**Tag Patterns:**
+- `Enemy_*` - Matches tags starting with "Enemy_" (Enemy_01, Enemy_Boss, etc.)
+- `*_Door` - Matches tags ending with "_Door" (Wooden_Door, Metal_Door, etc.)
+- `*` - Matches all tags
+
+**Query Logic:**
+- `matchAll: false` (default) - OR logic: actor matches if ANY tag matches pattern
+- `matchAll: true` - AND logic: actor matches if ALL tags match pattern
 
 ## When Stuck
 

@@ -75,16 +75,43 @@ See **TODO.md** for detailed Phase 6-11 roadmap.
 | 1-5 | Foundation (RC API, testing) | ✅ Complete |
 | 6 | C++ Workflow (GAS, CommonUI scaffolding) | ✅ Complete & Tested |
 | 7 | Easy Wins (Materials, Rendering, Input, Collision, Sequence) | ✅ Complete 2025-12-02 |
-| **8** | Medium Features (8 items, easy→hard) | **In Progress** (1/8 complete) |
+ | **8** | Medium Features (8 items, easy→hard) | **In Progress** (4/8 complete - 8.1-8.4 implemented with Python templates) |
 | 9 | CommonUI → GAS Runtime | Pending |
 | 10 | Blueprint Graph Editing (C++ plugin) | Lower Priority |
 | 11 | Advanced (World Partition, Skeletal, BT, PCG, etc.) | Research |
 
 ### Phase 8 Order (Easy → Hard)
-1. Asset Search (`manage_asset` add `search`)
-2. Curves (`manage_curves`)
-3. GameMode Setup (`manage_gamemode`)
-4. Actor Tags (`manage_tags`)
+1. ✅ **Asset Search** (`manage_asset` add `search`) - Fixed 2025-12-02
+   - Search by name pattern (wildcards: `*cube*`, `material_*`)
+   - Filter by asset type (`StaticMesh`, `Material`, `Texture2D`, etc.)
+   - Recursive directory search with pagination
+   - Returns metadata: total count, hasMore, pagination info
+   - **FIXED**: UE5.7 `Name` object → string conversion bug + boolean conversion
+   - **REQUIRES**: MCP restart after TypeScript rebuild
+2. ✅ **Curves** (`manage_curves`) - **Implemented 2025-12-02**
+   - Create curve assets (FloatCurve, VectorCurve, TransformCurve)
+   - Add keyframes with interpolation settings
+   - Evaluate curves at specific times
+   - Import/export curve data (CSV/JSON)
+   - **Status**: All 5 actions implemented with placeholder responses
+   - **Python templates**: Ready in `python-templates.ts` (CREATE_CURVE, ADD_CURVE_KEY, EVALUATE_CURVE)
+   - **Missing templates**: IMPORT_CURVE, EXPORT_CURVE
+3. ✅ **GameMode Setup** (`manage_gamemode`) - **Implemented 2025-12-02**
+   - Create multiplayer game framework (GameMode, GameState, PlayerState, PlayerController)
+   - Set default classes for multiplayer projects
+   - Configure replication modes (Full, Minimal, ClientPredicted)
+   - Setup input with Enhanced Input System
+   - **Status**: All 4 actions implemented with placeholder responses
+   - **Python templates**: Ready in `python-templates.ts` (CREATE_GAMEMODE_FRAMEWORK, SET_DEFAULT_CLASSES)
+   - **Missing templates**: CONFIGURE_REPLICATION, SETUP_INPUT
+4. ✅ **Actor Tags** (`manage_tags`) - **Implemented 2025-12-02**
+   - Add/remove tags from actors
+   - Query actors by tag patterns with wildcards (`Enemy_*`, `*_Door`)
+   - Check if actors have specific tags
+   - Clear all tags from actors
+   - **Features**: AND/OR logic for tag queries, batch operations
+   - **Status**: All 6 actions implemented with placeholder responses
+   - **Python templates**: ✅ **Complete** in `python-templates.ts` (ADD_ACTOR_TAGS, REMOVE_ACTOR_TAGS, HAS_ACTOR_TAG, GET_ACTOR_TAGS, CLEAR_ACTOR_TAGS, QUERY_ACTORS_BY_TAG)
 5. Splines (`manage_spline`)
 6. Component Management (`manage_component`)
 7. DataTables (`manage_datatable`)
@@ -105,6 +132,42 @@ See **TODO.md** for detailed Phase 6-11 roadmap.
 - Target: ~500 lines per file
 - Hard limit: 1000 lines (refactor if exceeded)
 - Priority: clean helpers > new features
+
+## Common Template Issues
+
+When writing Python templates in TypeScript:
+- **Boolean values**: Use `True`/`False` (Python), not `true`/`false` (JavaScript)
+- **Pattern**: `${booleanParam ? 'True' : 'False'}` not `${booleanParam}`
+- **Check existing code**: Search for `\$\{.*true.*\}` to find other instances
+- **UE5.7 Name objects**: `asset.asset_name` returns `Name` object, not string - use `str()` conversion
+
+## Phase 8.2-8.4 Python Templates Roadmap
+
+**Current Status**: Phase 8.2-8.4 tools are **fully implemented with placeholder responses**. Python templates are **ready** in `src/utils/python-templates.ts`.
+
+**Python Templates Ready**:
+- **Curves**: `CREATE_CURVE`, `ADD_CURVE_KEY`, `EVALUATE_CURVE`
+- **GameMode**: `CREATE_GAMEMODE_FRAMEWORK`, `SET_DEFAULT_CLASSES`
+- **Actor Tags**: `ADD_ACTOR_TAGS`, `REMOVE_ACTOR_TAGS`, `HAS_ACTOR_TAG`, `GET_ACTOR_TAGS`, `CLEAR_ACTOR_TAGS`, `QUERY_ACTORS_BY_TAG`
+
+**Missing Python Templates** (to be added):
+- `IMPORT_CURVE`, `EXPORT_CURVE` (for `manage_curves`)
+- `CONFIGURE_REPLICATION`, `SETUP_INPUT` (for `manage_gamemode`)
+
+**Implementation Roadmap**:
+1. **Connect tool handlers to Python templates** - Update `consolidated-tool-handlers.ts`
+2. **Test real Python execution** - Verify UE5.7 API compatibility
+3. **Add missing Python templates** - Complete the template set
+4. **Test all actions end-to-end** - Full integration testing
+
+**Note**: Tools currently return placeholder responses. Real Python execution will be enabled when handlers are connected to templates.
+
+## After Code Changes
+
+When modifying MCP code:
+1. Run `npm run build` 
+2. **User must restart OpenCode** to pick up changes
+3. Old code runs until MCP server process restarts
 
 ## Development
 

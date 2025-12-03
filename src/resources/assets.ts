@@ -325,26 +325,31 @@ registry = unreal.AssetRegistryHelpers.get_asset_registry()
 search_dir = r"${normalizedDir}"
 search_pattern = ${searchPattern ? `r"${searchPattern.replace(/"/g, '\\"')}"` : 'None'}
 asset_type = ${assetType ? `"${assetType}"` : 'None'}
-recursive = ${recursive}
+recursive = ${recursive ? 'True' : 'False'}
 limit = ${limit}
 offset = ${offset}
 
 try:
-    # Build search parameters
-    search_params = unreal.ARFilter()
-    
-    # Set package paths for directory search
+    # For UE5.7, use get_assets_by_path with recursive flag
     if search_dir:
-        # For UE5.7, we need to use get_assets_by_path with recursive flag
         if recursive:
             # Get all assets under directory
-            assets = registry.get_assets_by_path(search_dir, recursive)
+            assets = registry.get_assets_by_path(search_dir, True)
         else:
             # Get assets only in this directory
             assets = registry.get_assets_by_path(search_dir, False)
     else:
-        # Search entire content
-        assets = registry.get_all_assets()
+        # Search entire content - use scan_paths_synchronous first
+        # Note: get_all_assets() can be slow for large projects
+        # Try to get assets from root paths
+        assets = []
+        root_paths = ['/Game', '/Engine']
+        for path in root_paths:
+            try:
+                path_assets = registry.get_assets_by_path(path, True)
+                assets.extend(path_assets)
+            except:
+                pass
     
     # Apply filters
     filtered_assets = []
@@ -353,23 +358,28 @@ try:
         # Apply name pattern filter
         if search_pattern:
             import fnmatch
-            asset_name = asset.asset_name
+            asset_name = str(asset.asset_name)
             if not fnmatch.fnmatch(asset_name.lower(), search_pattern.lower()):
                 continue
         
         # Apply asset type filter
         if asset_type:
-            asset_class = asset.asset_class_path.asset_name
+            asset_class = str(asset.asset_class_path.asset_name)
             if asset_class != asset_type:
                 # Also check for common aliases
                 common_aliases = {
                     'StaticMesh': ['StaticMesh'],
-                    'Material': ['Material', 'MaterialInstanceConstant'],
-                    'Texture2D': ['Texture2D'],
-                    'SoundWave': ['SoundWave'],
-                    'Blueprint': ['Blueprint', 'BlueprintGeneratedClass'],
+                    'Material': ['Material', 'MaterialInstanceConstant', 'MaterialInstance'],
+                    'Texture2D': ['Texture2D', 'Texture', 'TextureCube'],
+                    'SoundWave': ['SoundWave', 'SoundCue'],
+                    'Blueprint': ['Blueprint', 'BlueprintGeneratedClass', 'WidgetBlueprint'],
                     'World': ['World'],
-                    'LevelSequence': ['LevelSequence']
+                    'LevelSequence': ['LevelSequence'],
+                    'SkeletalMesh': ['SkeletalMesh'],
+                    'Animation': ['AnimSequence', 'AnimMontage', 'AnimBlueprint'],
+                    'ParticleSystem': ['ParticleSystem', 'NiagaraSystem'],
+                    'DataAsset': ['DataAsset', 'PrimaryDataAsset'],
+                    'DataTable': ['DataTable']
                 }
                 if asset_type in common_aliases:
                     if asset_class not in common_aliases[asset_type]:
@@ -387,15 +397,16 @@ try:
     results = []
     for asset in paginated_assets:
         results.append({
-            'Name': asset.asset_name,
-            'Path': asset.package_name,
-            'Class': asset.asset_class_path.asset_name,
-            'PackagePath': asset.package_path
+            'Name': str(asset.asset_name),
+            'Path': str(asset.package_name),
+            'Class': str(asset.asset_class_path.asset_name),
+            'PackagePath': str(asset.package_path)
         })
     
     # Return results
     output = {
         'success': True,
+        'message': f'Found {len(paginated_assets)} assets (total: {total_count})',
         'assets': results,
         'searchResults': {
             'total': total_count,
@@ -412,6 +423,7 @@ try:
 except Exception as e:
     print("RESULT:" + json.dumps({
         'success': False,
+        'message': f'Search failed: {str(e)}',
         'error': str(e),
         'assets': [],
         'searchResults': {
@@ -432,10 +444,34 @@ except Exception as e:
       });
 
       if (interpreted.success) {
-        return interpreted.payload;
+        // Return a formatted response similar to list action
+        const payload = interpreted.payload as Record<string, unknown>;
+        const assets = Array.isArray(payload.assets) ? payload.assets : [];
+        const searchResults = payload.searchResults as Record<string, unknown> || {};
+        const total = typeof searchResults.total === 'number' ? searchResults.total : 0;
+        const returned = typeof searchResults.returned === 'number' ? searchResults.returned : 0;
+        const hasMore = typeof searchResults.hasMore === 'boolean' ? searchResults.hasMore : false;
+        
+        // Create a summary string like list action does
+        const summary = `Found ${returned} assets${total !== returned ? ` (of ${total} total)` : ''}`;
+        
+        return {
+          success: true,
+          message: interpreted.message,
+          summary,
+          total,
+          returned,
+          hasMore,
+          searchPattern: searchResults.searchPattern || searchPattern,
+          assetType: searchResults.assetType || assetType,
+          directory: searchResults.directory || normalizedDir,
+          // Include assets but it might not be displayed
+          assetsCount: assets.length
+        };
       } else {
         return {
           success: false,
+          message: interpreted.message,
           error: interpreted.error || 'Unknown search error',
           assets: [],
           searchResults: {

@@ -38,6 +38,9 @@ import { CppTools } from './tools/cpp.js';
 import { RenderingTools } from './tools/rendering.js';
 import { InputTools } from './tools/input.js';
 import { CollisionTools } from './tools/collision.js';
+import { CurvesTools } from './tools/curves.js';
+import { GameModeTools } from './tools/gamemode.js';
+import { TagTools } from './tools/tags.js';
 import { consolidatedToolDefinitions } from './tools/consolidated-tool-definitions.js';
 import { handleConsolidatedToolCall } from './tools/consolidated-tool-handlers.js';
 import { prompts } from './prompts/index.js';
@@ -257,6 +260,9 @@ export function createServer() {
   const renderingTools = new RenderingTools(bridge);
   const inputTools = new InputTools(bridge);
   const collisionTools = new CollisionTools(bridge);
+  const curvesTools = new CurvesTools(bridge);
+  const gameModeTools = new GameModeTools(bridge);
+  const tagTools = new TagTools(bridge);
 
   const server = new Server(
     {
@@ -546,6 +552,9 @@ export function createServer() {
       renderingTools,
       inputTools,
       collisionTools,
+      curvesTools,
+      gameModeTools,
+      tagTools,
       // Elicitation (client-optional)
       elicit: elicitation.elicit,
       supportsElicitation: elicitation.supports,

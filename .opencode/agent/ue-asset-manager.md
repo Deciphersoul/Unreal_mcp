@@ -27,6 +27,25 @@ Asset management specialist for Unreal Engine 5.7.
 4. editor_lifecycle action:save_all
 ```
 
+## Asset Search (Phase 8.1 - Fixed 2025-12-02)
+
+```
+# Search by name pattern (wildcards)
+1. manage_asset action:search searchPattern:*cube* recursive:true limit:20
+
+# Search by asset type
+2. manage_asset action:search assetType:Material recursive:true limit:10
+
+# Search with both filters
+3. manage_asset action:search searchPattern:*Test* assetType:Material recursive:true
+
+# Paginated search
+4. manage_asset action:search searchPattern:*material* offset:0 limit:10
+5. manage_asset action:search searchPattern:*material* offset:10 limit:10
+```
+
+**UE5.7 Specific Fix**: `asset.asset_name` returns `Name` object, not string - requires `str()` conversion in Python templates.
+
 ## Create Material Instance (Phase 7)
 
 ```
@@ -118,6 +137,7 @@ All `manage_cpp` actions have been tested and work:
 | `manage_input` | All actions working | ✅ Fixed 2025-12-02 |
 | `manage_material` | Parent must have exposed parameters | Use M_Base or engine materials |
 | `manage_cpp` | User passes class name without U/A prefix | Tool adds correct prefix |
+| `manage_asset` search | UE5.7 `Name` object bug | ✅ Fixed 2025-12-02 (needs MCP restart) |
 
 ## When Stuck
 

@@ -1837,5 +1837,260 @@ Supported actions: set_profile, set_response, set_enabled, get_settings.`,
         error: { type: 'string', description: 'Error message if failed' }
       }
     }
+  },
+
+  // 24. CURVES MANAGEMENT - Phase 8.2
+  {
+    name: 'manage_curves',
+    description: `Curve asset creation and editing for animation curves, float curves, and vector curves.
+
+Use it when you need to:
+- create new curve assets (FloatCurve, VectorCurve, TransformCurve).
+- add keyframes to curves with interpolation settings.
+- evaluate curves at specific times.
+- import/export curve data.
+
+Supported actions: create, add_key, evaluate, import, export.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action: {
+          type: 'string',
+          enum: ['create', 'add_key', 'evaluate', 'import', 'export'],
+          description: 'Curve action to perform'
+        },
+        name: {
+          type: 'string',
+          description: 'Name for the curve asset. Required for create action.'
+        },
+        path: {
+          type: 'string',
+          description: 'Content path where curve will be saved. Required for create action.'
+        },
+        curveType: {
+          type: 'string',
+          enum: ['FloatCurve', 'VectorCurve', 'TransformCurve'],
+          description: 'Type of curve to create. Required for create action.'
+        },
+        curvePath: {
+          type: 'string',
+          description: 'Content path to existing curve asset. Required for add_key, evaluate, export actions.'
+        },
+        time: {
+          type: 'number',
+          description: 'Time value for keyframe or evaluation. Required for add_key and evaluate actions.'
+        },
+        value: {
+          type: 'number',
+          description: 'Float value for FloatCurve keyframe. Required for add_key with FloatCurve.'
+        },
+        vectorValue: {
+          type: 'object',
+          properties: {
+            x: { type: 'number' },
+            y: { type: 'number' },
+            z: { type: 'number' }
+          },
+          description: 'Vector value for VectorCurve keyframe. Required for add_key with VectorCurve.'
+        },
+        interpolation: {
+          type: 'string',
+          enum: ['Linear', 'Constant', 'Cubic'],
+          description: 'Keyframe interpolation mode. Optional for add_key, defaults to Cubic.'
+        },
+        importPath: {
+          type: 'string',
+          description: 'File path to import curve data from (CSV/JSON). Required for import action.'
+        },
+        exportPath: {
+          type: 'string',
+          description: 'File path to export curve data to. Required for export action.'
+        },
+        exportFormat: {
+          type: 'string',
+          enum: ['CSV', 'JSON'],
+          description: 'Export format. Optional for export, defaults to CSV.'
+        }
+      },
+      required: ['action']
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', description: 'Whether the operation succeeded' },
+        message: { type: 'string', description: 'Status message' },
+        curvePath: { type: 'string', description: 'Path to created/modified curve asset' },
+        value: { type: 'number', description: 'Evaluated float value (for evaluate action)' },
+        vectorValue: {
+          type: 'object',
+          properties: {
+            x: { type: 'number' },
+            y: { type: 'number' },
+            z: { type: 'number' }
+          },
+          description: 'Evaluated vector value (for evaluate action)'
+        },
+        keyCount: { type: 'number', description: 'Number of keyframes in curve' },
+        error: { type: 'string', description: 'Error message if failed' }
+      }
+    }
+  },
+
+  // 25. GAMEMODE SETUP - Phase 8.3
+  {
+    name: 'manage_gamemode',
+    description: `GameMode and game framework class setup for multiplayer projects.
+
+Use it when you need to:
+- create GameMode, GameState, PlayerState, and PlayerController classes.
+- configure default classes for multiplayer framework.
+- set up replication and RPC patterns.
+- configure input and HUD classes.
+
+Supported actions: create_framework, set_default_classes, configure_replication, setup_input.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action: {
+          type: 'string',
+          enum: ['create_framework', 'set_default_classes', 'configure_replication', 'setup_input'],
+          description: 'GameMode action to perform'
+        },
+        projectName: {
+          type: 'string',
+          description: 'Project name for class naming. Required for create_framework action.'
+        },
+        includeGAS: {
+          type: 'boolean',
+          description: 'Include Gameplay Ability System classes (PlayerState with ASC). Optional for create_framework, defaults to true.'
+        },
+        includeCommonUI: {
+          type: 'boolean',
+          description: 'Include CommonUI classes. Optional for create_framework, defaults to true.'
+        },
+        gameModeClass: {
+          type: 'string',
+          description: 'GameMode class to set as default. Required for set_default_classes action.'
+        },
+        playerControllerClass: {
+          type: 'string',
+          description: 'PlayerController class to set as default. Optional for set_default_classes.'
+        },
+        playerStateClass: {
+          type: 'string',
+          description: 'PlayerState class to set as default. Optional for set_default_classes.'
+        },
+        gameStateClass: {
+          type: 'string',
+          description: 'GameState class to set as default. Optional for set_default_classes.'
+        },
+        hudClass: {
+          type: 'string',
+          description: 'HUD class to set as default. Optional for set_default_classes.'
+        },
+        replicationMode: {
+          type: 'string',
+          enum: ['Full', 'Minimal', 'ClientPredicted'],
+          description: 'Replication mode for configure_replication action. Required for configure_replication.'
+        },
+        inputContext: {
+          type: 'string',
+          description: 'Input Mapping Context asset path. Required for setup_input action.'
+        },
+        inputMode: {
+          type: 'string',
+          enum: ['UIOnly', 'GameOnly', 'GameAndUI'],
+          description: 'Default input mode. Optional for setup_input, defaults to GameOnly.'
+        },
+        mouseLockMode: {
+          type: 'string',
+          enum: ['DoNotLock', 'LockOnCapture', 'LockAlways'],
+          description: 'Mouse lock mode. Optional for setup_input, defaults to LockOnCapture.'
+        }
+      },
+      required: ['action']
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', description: 'Whether the operation succeeded' },
+        message: { type: 'string', description: 'Status message' },
+        classesCreated: { type: 'array', items: { type: 'string' }, description: 'List of classes created' },
+        defaultClasses: {
+          type: 'object',
+          description: 'Default classes that were set',
+          properties: {
+            gameMode: { type: 'string' },
+            playerController: { type: 'string' },
+            playerState: { type: 'string' },
+            gameState: { type: 'string' },
+            hud: { type: 'string' }
+          }
+        },
+        replicationConfig: { type: 'object', description: 'Replication configuration applied' },
+        inputConfig: { type: 'object', description: 'Input configuration applied' },
+        error: { type: 'string', description: 'Error message if failed' }
+      }
+    }
+  },
+
+  // 26. ACTOR TAGS - Phase 8.4
+  {
+    name: 'manage_tags',
+    description: `Actor tag management for organizing, querying, and filtering actors.
+
+Use it when you need to:
+- add or remove tags from actors.
+- query actors by tags.
+- manage tag containers on actors.
+- check if actors have specific tags.
+
+Supported actions: add, remove, has, get_all, clear, query.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action: {
+          type: 'string',
+          enum: ['add', 'remove', 'has', 'get_all', 'clear', 'query'],
+          description: 'Tag action to perform'
+        },
+        actorName: {
+          type: 'string',
+          description: 'Actor label/name to manage tags for. Required for add, remove, has, get_all, clear actions.'
+        },
+        tag: {
+          type: 'string',
+          description: 'Tag to add, remove, or check. Required for add, remove, has actions.'
+        },
+        tags: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Multiple tags to add or remove. Optional for add and remove actions.'
+        },
+        tagPattern: {
+          type: 'string',
+          description: 'Tag pattern with wildcards for querying (e.g., "Enemy_*", "*_Door"). Required for query action.'
+        },
+        matchAll: {
+          type: 'boolean',
+          description: 'Match all tags (AND) vs any tag (OR). Optional for query action, defaults to false (OR).'
+        }
+      },
+      required: ['action']
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', description: 'Whether the operation succeeded' },
+        message: { type: 'string', description: 'Status message' },
+        actorName: { type: 'string', description: 'Actor name' },
+        tag: { type: 'string', description: 'Tag that was added/removed/checked' },
+        tags: { type: 'array', items: { type: 'string' }, description: 'List of tags' },
+        hasTag: { type: 'boolean', description: 'Whether actor has the tag (for has action)' },
+        actors: { type: 'array', items: { type: 'string' }, description: 'List of actor names matching query' },
+        count: { type: 'number', description: 'Number of actors/tags' },
+        error: { type: 'string', description: 'Error message if failed' }
+      }
+    }
   }
 ];

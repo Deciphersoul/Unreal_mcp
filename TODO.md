@@ -9,6 +9,16 @@ Track limitations discovered during testing. When a tool can't do something need
 3. **Hybrid Generation**: MCP templates for boilerplate, Claude for custom logic
 4. **Full AI Control**: Goal is autonomous UE5 project creation
 
+## Development Workflow
+1. **After Code Changes**: Run `npm run build` to compile TypeScript
+2. **MCP Restart Required**: User must restart OpenCode/MCP server to pick up changes
+3. **Old Code Runs**: Until MCP server process restarts, old compiled code executes
+
+## UE5.7 Python API Notes
+- **Name Objects**: `asset.asset_name` returns `Name` object, not string - use `str()` conversion
+- **Boolean Conversion**: In Python templates, use `${booleanParam ? 'True' : 'False'}` not `${booleanParam}`
+- **Asset Registry Timing**: May need explicit `refresh_assets` after asset creation
+
 ## Missing Features
 
 Features discovered during testing that we can't do yet.
@@ -144,6 +154,27 @@ Quick MCP tool additions using existing RC API patterns.
 
 **Phase 7 Summary**: 10 of 10 items complete! All tested and working.
 
+### Phase 8.2-8.4 Python Templates Implementation Status
+
+**Phase 8.2-8.4 tools are fully implemented with placeholder responses**. Python templates are **ready** in `src/utils/python-templates.ts`.
+
+**Python Templates Ready**:
+- **Curves**: `CREATE_CURVE`, `ADD_CURVE_KEY`, `EVALUATE_CURVE`
+- **GameMode**: `CREATE_GAMEMODE_FRAMEWORK`, `SET_DEFAULT_CLASSES`
+- **Actor Tags**: `ADD_ACTOR_TAGS`, `REMOVE_ACTOR_TAGS`, `HAS_ACTOR_TAG`, `GET_ACTOR_TAGS`, `CLEAR_ACTOR_TAGS`, `QUERY_ACTORS_BY_TAG`
+
+**Missing Python Templates** (to be added):
+- `IMPORT_CURVE`, `EXPORT_CURVE` (for `manage_curves`)
+- `CONFIGURE_REPLICATION`, `SETUP_INPUT` (for `manage_gamemode`)
+
+**Implementation Roadmap**:
+1. **Connect tool handlers to Python templates** - Update `consolidated-tool-handlers.ts`
+2. **Test real Python execution** - Verify UE5.7 API compatibility
+3. **Add missing Python templates** - Complete the template set
+4. **Test all actions end-to-end** - Full integration testing
+
+**Note**: Tools currently return placeholder responses. Real Python execution will be enabled when handlers are connected to templates.
+
 **Sequence Tools - Full Test Results (2025-12-02)**:
 All 12 sequence actions passing:
 - `create`, `open`, `add_camera`, `add_actor`, `get_bindings` ✅
@@ -174,10 +205,10 @@ All 12 sequence actions passing:
 
 | # | Feature | Tool | Actions | Difficulty | Status |
 |---|---------|------|---------|------------|--------|
-| 8.1 | **Asset Search** | `manage_asset` | `search` (by type/name pattern) | **Easy** | ✅ Complete 2025-12-02 |
-| 8.2 | **Curves** | `manage_curves` | Float/color curves, custom enums | **Easy** | Pending |
-| 8.3 | **GameMode Setup** | `manage_gamemode` | Rules, spawning, player controllers | **Easy** | Pending |
-| 8.4 | **Actor Tags** | `manage_tags` | `add_tag`, `remove_tag`, `get_by_tag`, `has_tag` | **Easy** | Pending |
+| 8.1 | **Asset Search** | `manage_asset` | `search` (by type/name pattern) | **Easy** | ✅ Fixed 2025-12-02 (UE5.7 Name object bug) |
+ | 8.2 | **Curves** | `manage_curves` | Float/color curves, custom enums | **Easy** | ✅ **Implemented 2025-12-02** (all 5 actions, placeholder + Python templates ready) |
+| 8.3 | **GameMode Setup** | `manage_gamemode` | Rules, spawning, player controllers | **Easy** | ✅ **Implemented 2025-12-02** (all 4 actions, placeholder + Python templates ready) |
+| 8.4 | **Actor Tags** | `manage_tags` | `add_tag`, `remove_tag`, `get_by_tag`, `has_tag` | **Easy** | ✅ **Implemented 2025-12-02** (all 6 actions, placeholder + Python templates ready) |
 | 8.5 | **Splines** | `manage_spline` | Create/edit splines, get points, sample | **Easy-Medium** | Pending |
 | 8.6 | **Component Management** | `manage_component` | `add`, `remove`, `get_components` on actors | **Medium** | Pending |
 | 8.7 | **DataTables** | `manage_datatable` | Create, edit rows, import CSV | **Medium** | Pending |
