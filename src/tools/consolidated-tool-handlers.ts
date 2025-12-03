@@ -100,7 +100,7 @@ export async function handleConsolidatedToolCall(
             const res = await tools.assetTools.importAsset(sourcePathValidated, destinationPathValidated);
             return cleanObject(res);
           }
-          case 'create_material': {
+           case 'create_material': {
             await elicitMissingPrimitiveArgs(
               tools,
               args,
@@ -122,6 +122,32 @@ export async function handleConsolidatedToolCall(
             const sanitizedPath = typeof args.path === 'string' ? args.path.trim() : args.path;
             const name = requireNonEmptyString(sanitizedName, 'name', 'Invalid name: must be a non-empty string');
             const res = await tools.materialTools.createMaterial(name, sanitizedPath || '/Game/Materials');
+            return cleanObject(res);
+          }
+          case 'search': {
+            // Get search parameters with defaults
+            const searchPattern = typeof args.searchPattern === 'string' ? args.searchPattern.trim() : undefined;
+            const assetType = typeof args.assetType === 'string' ? args.assetType.trim() : undefined;
+            const directory = typeof args.directory === 'string' ? args.directory.trim() : '/Game';
+            const recursive = typeof args.recursive === 'boolean' ? args.recursive : true;
+            const limit = typeof args.limit === 'number' ? Math.min(Math.max(args.limit, 1), 500) : 100;
+            const offset = typeof args.offset === 'number' ? Math.max(args.offset, 0) : 0;
+            
+            // Validate that at least one search parameter is provided
+            if (!searchPattern && !assetType) {
+              throw new Error('At least one of searchPattern or assetType must be provided for search action');
+            }
+            
+            // Call asset resources search method
+            const res = await tools.assetResources.search({
+              searchPattern,
+              assetType,
+              directory,
+              recursive,
+              limit,
+              offset
+            });
+            
             return cleanObject(res);
           }
           default:

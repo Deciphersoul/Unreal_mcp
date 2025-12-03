@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.1] - 2025-12-02
+### Added - Phase 8.1: Asset Search
+
+#### Enhanced Tool: `manage_asset` - Added `search` action
+- `search`: Search assets with filters (name pattern, asset type, directory, recursive)
+- Parameters: `searchPattern` (wildcards: "*cube*"), `assetType` ("StaticMesh", "Material", etc.)
+- Pagination: `limit` (default: 100, max: 500), `offset` for pagination
+- Recursive search: `recursive` (default: true), `directory` (default: "/Game")
+- Returns: Assets list with metadata including total count, pagination info
+
+### Changed
+- Version bumped to 0.7.1
+- Phase 8: 1/8 items complete (8.1 Asset Search)
+- `manage_asset` tool now has 4 actions: `list`, `import`, `create_material`, `search`
+
+---
+
 ## [0.7.0] - 2025-12-01
 ### Added - Phase 7 (Partial): Easy Wins - Data & Config
 

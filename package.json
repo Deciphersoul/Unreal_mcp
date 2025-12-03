@@ -1,6 +1,6 @@
 {
   "name": "ue-mcp-extended",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "mcpName": "io.github.Deciphersoul/ue-mcp-extended",
   "description": "Extended Unreal Engine MCP server with debugging, query, selection, and build tools for AI-driven game development. Forked from ChiR24/Unreal_mcp.",
   "type": "module",

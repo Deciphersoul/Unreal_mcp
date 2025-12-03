@@ -75,7 +75,7 @@ See **TODO.md** for detailed Phase 6-11 roadmap.
 | 1-5 | Foundation (RC API, testing) | ✅ Complete |
 | 6 | C++ Workflow (GAS, CommonUI scaffolding) | ✅ Complete & Tested |
 | 7 | Easy Wins (Materials, Rendering, Input, Collision, Sequence) | ✅ Complete 2025-12-02 |
-| **8** | Medium Features (8 items, easy→hard) | **Next** |
+| **8** | Medium Features (8 items, easy→hard) | **In Progress** (1/8 complete) |
 | 9 | CommonUI → GAS Runtime | Pending |
 | 10 | Blueprint Graph Editing (C++ plugin) | Lower Priority |
 | 11 | Advanced (World Partition, Skeletal, BT, PCG, etc.) | Research |

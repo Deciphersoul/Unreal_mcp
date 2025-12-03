@@ -174,7 +174,7 @@ All 12 sequence actions passing:
 
 | # | Feature | Tool | Actions | Difficulty | Status |
 |---|---------|------|---------|------------|--------|
-| 8.1 | **Asset Search** | `manage_asset` | `search` (by type/name pattern) | **Easy** | Pending |
+| 8.1 | **Asset Search** | `manage_asset` | `search` (by type/name pattern) | **Easy** | ✅ Complete 2025-12-02 |
 | 8.2 | **Curves** | `manage_curves` | Float/color curves, custom enums | **Easy** | Pending |
 | 8.3 | **GameMode Setup** | `manage_gamemode` | Rules, spawning, player controllers | **Easy** | Pending |
 | 8.4 | **Actor Tags** | `manage_tags` | `add_tag`, `remove_tag`, `get_by_tag`, `has_tag` | **Easy** | Pending |

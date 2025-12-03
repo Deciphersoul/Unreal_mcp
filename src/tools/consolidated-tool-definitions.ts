@@ -1,23 +1,24 @@
 // Consolidated tool definitions - reduced from 36 to 13 multi-purpose tools
 
 export const consolidatedToolDefinitions = [
-  // 1. ASSET MANAGER - Combines asset operations
+   // 1. ASSET MANAGER - Combines asset operations
   {
     name: 'manage_asset',
-  description: `Asset library utility for browsing, importing, and bootstrapping simple materials.
+  description: `Asset library utility for browsing, importing, bootstrapping simple materials, and searching assets.
 
 Use it when you need to:
 - explore project content (\u002fContent automatically maps to \u002fGame).
 - import FBX/PNG/WAV/EXR files into the project.
 - spin up a minimal Material asset at a specific path.
+- search for assets by name, type, or location.
 
-Supported actions: list, import, create_material.`,
+Supported actions: list, import, create_material, search.`,
     inputSchema: {
       type: 'object',
       properties: {
         action: { 
           type: 'string', 
-          enum: ['list', 'import', 'create_material'],
+          enum: ['list', 'import', 'create_material', 'search'],
           description: 'Action to perform'
         },
         // For list
@@ -27,7 +28,13 @@ Supported actions: list, import, create_material.`,
         destinationPath: { type: 'string', description: 'Destination path in project content where asset will be imported. Example: "/Game/ImportedAssets"' },
         // For create_material
         name: { type: 'string', description: 'Name for the new material asset. Example: "MyMaterial"' },
-        path: { type: 'string', description: 'Content path where material will be saved. Example: "/Game/Materials"' }
+        path: { type: 'string', description: 'Content path where material will be saved. Example: "/Game/Materials"' },
+        // For search
+        searchPattern: { type: 'string', description: 'Name pattern with wildcards (e.g., "*cube*", "material_*", "SM_*"). Case-insensitive.' },
+        assetType: { type: 'string', description: 'Filter by asset class (e.g., "StaticMesh", "Material", "Texture2D", "SoundWave", "Blueprint").' },
+        recursive: { type: 'boolean', description: 'Search subdirectories (default: true).' },
+        limit: { type: 'number', description: 'Maximum results to return (default: 100, max: 500).' },
+        offset: { type: 'number', description: 'Pagination offset (default: 0).' }
       },
       required: ['action']
     },
@@ -37,7 +44,7 @@ Supported actions: list, import, create_material.`,
         success: { type: 'boolean', description: 'Whether the operation succeeded' },
         assets: { 
           type: 'array', 
-          description: 'List of assets (for list action)',
+          description: 'List of assets (for list and search actions)',
           items: {
             type: 'object',
             properties: {
@@ -50,6 +57,18 @@ Supported actions: list, import, create_material.`,
         },
         paths: { type: 'array', items: { type: 'string' }, description: 'Imported asset paths (for import)' },
         materialPath: { type: 'string', description: 'Created material path (for create_material)' },
+        searchResults: { 
+          type: 'object',
+          description: 'Search metadata (for search action)',
+          properties: {
+            total: { type: 'number', description: 'Total matching assets found' },
+            returned: { type: 'number', description: 'Number of assets returned in this page' },
+            hasMore: { type: 'boolean', description: 'Whether there are more results beyond limit' },
+            searchPattern: { type: 'string', description: 'The search pattern used' },
+            assetType: { type: 'string', description: 'The asset type filter used' },
+            directory: { type: 'string', description: 'The directory searched' }
+          }
+        },
         message: { type: 'string', description: 'Status message' },
         error: { type: 'string', description: 'Error message if failed' }
       }

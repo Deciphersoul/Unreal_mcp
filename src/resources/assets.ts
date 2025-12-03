@@ -240,7 +240,7 @@ except Exception as e:
     };
   }
 
-  async find(assetPath: string) {
+   async find(assetPath: string) {
     // Guard against invalid paths (trailing slash, empty, whitespace)
     if (!assetPath || typeof assetPath !== 'string' || assetPath.trim() === '' || assetPath.endsWith('/')) {
       return false;
@@ -268,5 +268,201 @@ except Exception as e:
     }
 
     return false;
+  }
+
+  /**
+   * Search for assets with filters
+   * @param params Search parameters
+   */
+  async search(params: {
+    searchPattern?: string;
+    assetType?: string;
+    directory?: string;
+    recursive?: boolean;
+    limit?: number;
+    offset?: number;
+  }) {
+    const {
+      searchPattern,
+      assetType,
+      directory = '/Game',
+      recursive = true,
+      limit = 100,
+      offset = 0
+    } = params;
+
+    // Normalize directory
+    const normalizedDir = this.normalizeDir(directory);
+
+    // Check if bridge is connected
+    if (!this.bridge.isConnected) {
+      return {
+        success: true,
+        assets: [],
+        searchResults: {
+          total: 0,
+          returned: 0,
+          hasMore: false,
+          searchPattern,
+          assetType,
+          directory: normalizedDir
+        },
+        warning: 'Unreal Engine is not connected. Please ensure Unreal Engine is running with Remote Control enabled.',
+        connectionStatus: 'disconnected'
+      };
+    }
+
+    try {
+      // Build Python script for UE5.7 asset registry search
+      const py = `
+import unreal
+import json
+
+# Get asset registry
+registry = unreal.AssetRegistryHelpers.get_asset_registry()
+
+# Prepare search parameters
+search_dir = r"${normalizedDir}"
+search_pattern = ${searchPattern ? `r"${searchPattern.replace(/"/g, '\\"')}"` : 'None'}
+asset_type = ${assetType ? `"${assetType}"` : 'None'}
+recursive = ${recursive}
+limit = ${limit}
+offset = ${offset}
+
+try:
+    # Build search parameters
+    search_params = unreal.ARFilter()
+    
+    # Set package paths for directory search
+    if search_dir:
+        # For UE5.7, we need to use get_assets_by_path with recursive flag
+        if recursive:
+            # Get all assets under directory
+            assets = registry.get_assets_by_path(search_dir, recursive)
+        else:
+            # Get assets only in this directory
+            assets = registry.get_assets_by_path(search_dir, False)
+    else:
+        # Search entire content
+        assets = registry.get_all_assets()
+    
+    # Apply filters
+    filtered_assets = []
+    
+    for asset in assets:
+        # Apply name pattern filter
+        if search_pattern:
+            import fnmatch
+            asset_name = asset.asset_name
+            if not fnmatch.fnmatch(asset_name.lower(), search_pattern.lower()):
+                continue
+        
+        # Apply asset type filter
+        if asset_type:
+            asset_class = asset.asset_class_path.asset_name
+            if asset_class != asset_type:
+                # Also check for common aliases
+                common_aliases = {
+                    'StaticMesh': ['StaticMesh'],
+                    'Material': ['Material', 'MaterialInstanceConstant'],
+                    'Texture2D': ['Texture2D'],
+                    'SoundWave': ['SoundWave'],
+                    'Blueprint': ['Blueprint', 'BlueprintGeneratedClass'],
+                    'World': ['World'],
+                    'LevelSequence': ['LevelSequence']
+                }
+                if asset_type in common_aliases:
+                    if asset_class not in common_aliases[asset_type]:
+                        continue
+                else:
+                    continue
+        
+        filtered_assets.append(asset)
+    
+    # Apply pagination
+    total_count = len(filtered_assets)
+    paginated_assets = filtered_assets[offset:offset + limit]
+    
+    # Format results
+    results = []
+    for asset in paginated_assets:
+        results.append({
+            'Name': asset.asset_name,
+            'Path': asset.package_name,
+            'Class': asset.asset_class_path.asset_name,
+            'PackagePath': asset.package_path
+        })
+    
+    # Return results
+    output = {
+        'success': True,
+        'assets': results,
+        'searchResults': {
+            'total': total_count,
+            'returned': len(paginated_assets),
+            'hasMore': (offset + len(paginated_assets)) < total_count,
+            'searchPattern': search_pattern,
+            'assetType': asset_type,
+            'directory': search_dir
+        }
+    }
+    
+    print("RESULT:" + json.dumps(output))
+    
+except Exception as e:
+    print("RESULT:" + json.dumps({
+        'success': False,
+        'error': str(e),
+        'assets': [],
+        'searchResults': {
+            'total': 0,
+            'returned': 0,
+            'hasMore': False,
+            'searchPattern': search_pattern,
+            'assetType': asset_type,
+            'directory': search_dir
+        }
+    }))
+`.trim();
+
+      const resp = await this.bridge.executePython(py);
+      const interpreted = interpretStandardResult(resp, {
+        successMessage: 'Asset search completed',
+        failureMessage: 'Asset search failed'
+      });
+
+      if (interpreted.success) {
+        return interpreted.payload;
+      } else {
+        return {
+          success: false,
+          error: interpreted.error || 'Unknown search error',
+          assets: [],
+          searchResults: {
+            total: 0,
+            returned: 0,
+            hasMore: false,
+            searchPattern,
+            assetType,
+            directory: normalizedDir
+          }
+        };
+      }
+    } catch (error: any) {
+      console.warn('Asset search failed:', error.message);
+      return {
+        success: false,
+        error: error.message,
+        assets: [],
+        searchResults: {
+          total: 0,
+          returned: 0,
+          hasMore: false,
+          searchPattern,
+          assetType,
+          directory: normalizedDir
+        }
+      };
+    }
   }
 }
