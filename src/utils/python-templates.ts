@@ -228,108 +228,328 @@ except Exception as e:
 
    // Phase 8.2: Curves Management
    CREATE_CURVE: {
-     name: 'create_curve',
-     script: `
+      name: 'create_curve',
+      script: `
 import unreal
 import json
+
+result = {'success': False, 'error': 'Unknown error'}
 
 try:
     asset_tools = unreal.AssetToolsHelpers.get_asset_tools()
     if not asset_tools:
-        print(f"RESULT:{json.dumps({'success': False, 'error': 'AssetTools not available'})}")
-        exit(0)
-    
-    # Create curve asset factory
-    factory = unreal.CurveFactory()
-    factory.curve_class = unreal.{curve_type}
-    
-    # Create asset
-    asset = asset_tools.create_asset(
-        asset_name='{name}',
-        package_path='{path}',
-        asset_class=unreal.{curve_type},
-        factory=factory
-    )
-    
-    if asset:
-        print(f"RESULT:{json.dumps({'success': True, 'curvePath': asset.get_path_name(), 'keyCount': 0, 'message': 'Curve created successfully'})}")
+        result['error'] = 'AssetTools not available'
     else:
-        print(f"RESULT:{json.dumps({'success': False, 'error': 'Failed to create curve asset'})}")
-except Exception as e:
-    print(f"RESULT:{json.dumps({'success': False, 'error': str(e)})}")
-     `.trim()
-   },
+        curve_type = '{curve_type}'
+        curve_class_map = {
+            'FloatCurve': getattr(unreal, 'CurveFloat', None),
+            'VectorCurve': getattr(unreal, 'CurveVector', None),
+            'TransformCurve': getattr(unreal, 'CurveVector', None)
+        }
+        transform_cls = getattr(unreal, 'TransformCurve', None)
+        if transform_cls:
+            curve_class_map['TransformCurve'] = transform_cls
+        factory_class_map = {
+            'FloatCurve': getattr(unreal, 'CurveFloatFactory', getattr(unreal, 'CurveFactory', None)),
+            'VectorCurve': getattr(unreal, 'CurveVectorFactory', getattr(unreal, 'CurveFactory', None)),
+            'TransformCurve': getattr(unreal, 'CurveVectorFactory', getattr(unreal, 'CurveFactory', None))
+        }
 
-   ADD_CURVE_KEY: {
-     name: 'add_curve_key',
-     script: `
+        asset_class = curve_class_map.get(curve_type)
+        factory_class = factory_class_map.get(curve_type) or getattr(unreal, 'CurveFactory', None)
+
+        if not asset_class or not factory_class:
+            result['error'] = f'Unsupported curve type: {curve_type}'
+        else:
+            factory = factory_class()
+            if hasattr(factory, 'set_editor_property'):
+                try:
+                    factory.set_editor_property('curve_class', asset_class)
+                except Exception:
+                    try:
+                        factory.curve_class = asset_class
+                    except Exception:
+                        pass
+            elif hasattr(factory, 'curve_class'):
+                try:
+                    factory.curve_class = asset_class
+                except Exception:
+                    pass
+
+            asset = asset_tools.create_asset(
+                asset_name='{name}',
+                package_path='{path}',
+                asset_class=asset_class,
+                factory=factory
+            )
+
+            if asset:
+                unreal.EditorAssetLibrary.save_asset(asset.get_path_name())
+                result = {
+                    'success': True,
+                    'curvePath': asset.get_path_name(),
+                    'keyCount': 0,
+                    'message': 'Curve created successfully'
+                }
+            else:
+                result['error'] = 'Failed to create curve asset'
+except Exception as e:
+    result['error'] = str(e)
+
+print('RESULT:' + json.dumps(result))
+     `.trim()
+    },
+
+    ADD_CURVE_KEY: {
+      name: 'add_curve_key',
+      script: `
 import unreal
 import json
 
+def resolve_float_curve_data(curve):
+    getters = []
+    if hasattr(curve, 'get_editor_property'):
+        getters.append(lambda: curve.get_editor_property('float_curve'))
+    getters.append(lambda: getattr(curve, 'float_curve', None))
+    if hasattr(curve, 'get_curve'):
+        getters.append(lambda: curve.get_curve())
+    for getter in getters:
+        try:
+            rich = getter()
+            if rich:
+                return rich
+        except Exception:
+            continue
+    return None
+
+def resolve_vector_curve_channels(curve):
+    channels = []
+    sources = []
+    if hasattr(curve, 'get_editor_property'):
+        sources.append(lambda: curve.get_editor_property('float_curves'))
+    sources.append(lambda: getattr(curve, 'float_curves', None))
+    for source in sources:
+        try:
+            data = source()
+            if data:
+                seq = list(data)
+                if seq:
+                    return seq
+        except Exception:
+            continue
+    if hasattr(curve, 'get_curve'):
+        for idx in range(3):
+            try:
+                rc = curve.get_curve(idx)
+                if rc:
+                    channels.append(rc)
+            except Exception:
+                break
+    return channels
+
+def get_rich_curve_key_count(rich_curve):
+    if not rich_curve:
+        return 0
+    try:
+        if hasattr(rich_curve, 'get_num_keys'):
+            return int(rich_curve.get_num_keys())
+    except Exception:
+        pass
+    try:
+        keys = rich_curve.get_keys()
+        if isinstance(keys, (list, tuple)):
+            return len(keys)
+    except Exception:
+        pass
+    try:
+        return len(list(rich_curve.keys))
+    except Exception:
+        return 0
+
 try:
-    # Load curve asset
     curve = unreal.EditorAssetLibrary.load_asset('{curve_path}')
     if not curve:
-        print(f"RESULT:{json.dumps({'success': False, 'error': 'Curve not found at path: {curve_path}'})}")
-        exit(0)
-    
-    # Add key based on curve type
-    if isinstance(curve, unreal.CurveFloat):
-        curve.add_key({time}, {value})
-        key_count = len(curve.get_keys())
-    elif isinstance(curve, unreal.CurveVector):
-        vector = unreal.Vector({vector_x}, {vector_y}, {vector_z})
-        curve.add_key({time}, vector)
-        key_count = len(curve.get_keys())
-    elif isinstance(curve, unreal.CurveLinearColor):
-        color = unreal.LinearColor({vector_x}, {vector_y}, {vector_z}, 1.0)
-        curve.add_key({time}, color)
-        key_count = len(curve.get_keys())
-    else:
-        print(f"RESULT:{json.dumps({'success': False, 'error': f'Unsupported curve type: {type(curve).__name__}'})}")
-        exit(0)
-    
-    # Save the curve
-    unreal.EditorAssetLibrary.save_asset('{curve_path}')
-    
-    print(f"RESULT:{json.dumps({'success': True, 'keyCount': key_count, 'message': 'Key added successfully'})}")
-except Exception as e:
-    print(f"RESULT:{json.dumps({'success': False, 'error': str(e)})}")
-     `.trim()
-   },
+        print("RESULT:" + json.dumps({'success': False, 'error': f'Curve not found at path: {curve_path}'}))
+        raise SystemExit
 
-   EVALUATE_CURVE: {
-     name: 'evaluate_curve',
-     script: `
+    time_value = float({time})
+    scalar_value = float({value})
+    vector_value = unreal.Vector({vector_x}, {vector_y}, {vector_z})
+
+    key_added = False
+    key_count = 0
+    errors = []
+
+    try:
+        curve.add_key(time_value, scalar_value)
+        key_added = True
+    except Exception as direct_error:
+        errors.append(str(direct_error))
+        if isinstance(curve, unreal.CurveFloat):
+            rich_curve = resolve_float_curve_data(curve)
+            if rich_curve and hasattr(rich_curve, 'add_key'):
+                try:
+                    rich_curve.add_key(time_value, scalar_value)
+                    key_count = get_rich_curve_key_count(rich_curve)
+                    key_added = True
+                except Exception as rich_error:
+                    errors.append(str(rich_error))
+        elif isinstance(curve, unreal.CurveVector):
+            channels = resolve_vector_curve_channels(curve)
+            if channels:
+                comps = [vector_value.x, vector_value.y, vector_value.z]
+                for idx, channel in enumerate(channels[:3]):
+                    try:
+                        value = comps[idx] if idx < len(comps) else 0.0
+                        channel.add_key(time_value, value)
+                        key_added = True
+                    except Exception as channel_error:
+                        errors.append(str(channel_error))
+                if channels:
+                    key_count = get_rich_curve_key_count(channels[0])
+        elif isinstance(curve, unreal.CurveLinearColor):
+            color = unreal.LinearColor(vector_value.x, vector_value.y, vector_value.z, 1.0)
+            try:
+                curve.add_key(time_value, color)
+                key_added = True
+            except Exception as color_error:
+                errors.append(str(color_error))
+
+    if not key_added:
+        print("RESULT:" + json.dumps({'success': False, 'error': 'Failed to add curve key', 'details': errors}))
+        raise SystemExit
+
+    try:
+        unreal.EditorAssetLibrary.save_asset('{curve_path}')
+    except Exception as save_error:
+        errors.append(str(save_error))
+
+    response = {'success': True, 'message': 'Key added successfully'}
+    if key_count:
+        response['keyCount'] = key_count
+    if errors:
+        response['warnings'] = errors
+    print("RESULT:" + json.dumps(response))
+except SystemExit:
+    pass
+except Exception as e:
+    print("RESULT:" + json.dumps({'success': False, 'error': str(e)}))
+      `.trim()
+    },
+
+
+    EVALUATE_CURVE: {
+      name: 'evaluate_curve',
+      script: `
 import unreal
 import json
 
+def resolve_float_curve_data(curve):
+    getters = []
+    if hasattr(curve, 'get_editor_property'):
+        getters.append(lambda: curve.get_editor_property('float_curve'))
+    getters.append(lambda: getattr(curve, 'float_curve', None))
+    if hasattr(curve, 'get_curve'):
+        getters.append(lambda: curve.get_curve())
+    for getter in getters:
+        try:
+            rich = getter()
+            if rich:
+                return rich
+        except Exception:
+            continue
+    return None
+
+def resolve_vector_curve_channels(curve):
+    channels = []
+    sources = []
+    if hasattr(curve, 'get_editor_property'):
+        sources.append(lambda: curve.get_editor_property('float_curves'))
+    sources.append(lambda: getattr(curve, 'float_curves', None))
+    for source in sources:
+        try:
+            data = source()
+            if data:
+                seq = list(data)
+                if seq:
+                    return seq
+        except Exception:
+            continue
+    if hasattr(curve, 'get_curve'):
+        for idx in range(3):
+            try:
+                rc = curve.get_curve(idx)
+                if rc:
+                    channels.append(rc)
+            except Exception:
+                break
+    return channels
+
+def get_rich_curve_key_count(rich_curve):
+    if not rich_curve:
+        return 0
+    try:
+        if hasattr(rich_curve, 'get_num_keys'):
+            return int(rich_curve.get_num_keys())
+    except Exception:
+        pass
+    try:
+        keys = rich_curve.get_keys()
+        if isinstance(keys, (list, tuple)):
+            return len(keys)
+    except Exception:
+        pass
+    try:
+        return len(list(rich_curve.keys))
+    except Exception:
+        return 0
+
+def get_curve_key_count(curve):
+    if isinstance(curve, unreal.CurveFloat):
+        return get_rich_curve_key_count(resolve_float_curve_data(curve))
+    if isinstance(curve, unreal.CurveVector):
+        channels = resolve_vector_curve_channels(curve)
+        if channels:
+            return get_rich_curve_key_count(channels[0])
+        return 0
+    if isinstance(curve, unreal.CurveLinearColor):
+        return get_rich_curve_key_count(resolve_float_curve_data(curve))
+    return 0
+
 try:
-    # Load curve asset
     curve = unreal.EditorAssetLibrary.load_asset('{curve_path}')
     if not curve:
-        print(f"RESULT:{json.dumps({'success': False, 'error': 'Curve not found at path: {curve_path}'})}")
-        exit(0)
-    
-    # Evaluate based on curve type
+        print("RESULT:" + json.dumps({'success': False, 'error': f'Curve not found at path: {curve_path}'}))
+        raise SystemExit
+
+    time_value = float({time})
+    response = {'success': True, 'message': 'Curve evaluated'}
+
     if isinstance(curve, unreal.CurveFloat):
-        value = curve.get_float_value({time})
-        key_count = len(curve.get_keys())
-        print(f"RESULT:{json.dumps({'success': True, 'value': value, 'keyCount': key_count, 'message': 'Curve evaluated'})}")
+        value = curve.get_float_value(time_value)
+        response['value'] = value
     elif isinstance(curve, unreal.CurveVector):
-        vector = curve.get_vector_value({time})
-        key_count = len(curve.get_keys())
-        print(f"RESULT:{json.dumps({'success': True, 'vectorValue': {'x': vector.x, 'y': vector.y, 'z': vector.z}, 'keyCount': key_count, 'message': 'Curve evaluated'})}")
+        vector = curve.get_vector_value(time_value)
+        response['vectorValue'] = {'x': vector.x, 'y': vector.y, 'z': vector.z}
     elif isinstance(curve, unreal.CurveLinearColor):
-        color = curve.get_linear_color_value({time})
-        key_count = len(curve.get_keys())
-        print(f"RESULT:{json.dumps({'success': True, 'vectorValue': {'x': color.r, 'y': color.g, 'z': color.b}, 'keyCount': key_count, 'message': 'Curve evaluated'})}")
+        color = curve.get_linear_color_value(time_value)
+        response['vectorValue'] = {'x': color.r, 'y': color.g, 'z': color.b, 'a': color.a}
     else:
-        print(f"RESULT:{json.dumps({'success': False, 'error': f'Unsupported curve type: {type(curve).__name__}'})}")
+        response['value'] = time_value
+        response.setdefault('warnings', []).append(f"Unsupported curve type {type(curve).__name__}, returning input time")
+
+    key_count = get_curve_key_count(curve)
+    if key_count:
+        response['keyCount'] = key_count
+
+    print("RESULT:" + json.dumps(response))
+except SystemExit:
+    pass
 except Exception as e:
-    print(f"RESULT:{json.dumps({'success': False, 'error': str(e)})}")
-     `.trim()
-   },
+    print("RESULT:" + json.dumps({'success': False, 'error': str(e)}))
+      `.trim()
+    },
+
 
    // Phase 8.3: GameMode Setup
    CREATE_GAMEMODE_FRAMEWORK: {

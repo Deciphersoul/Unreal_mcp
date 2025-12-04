@@ -57,7 +57,7 @@ Ultimate goal: **Full autonomous UE5 project creation by AI.**
 - **Port check**: `netstat -an | findstr 30010` should show LISTENING
 
 ### Automated Test Reports
-- `npm run test:tools` executes the shared suite (currently 97 scenarios, all **passing** as of 2025-12-04 after the spline/actor/widget fixes)
+- `npm run test:tools` executes the shared suite (currently 97 scenarios, with Spline Tools #1 expected to fail until the spline creation bug is fixed)
 - Each run writes a JSON report under `tests/reports/` (filename `unreal-tool-test-results-<timestamp>.json`) for downstream agents to review
 - **Important**: `control_actor.spawn` now accepts an optional `replaceExisting: true` flag that auto-deletes an existing actor label before spawning. Use it for automation loops (e.g., Actor Tools #4) instead of manual cleanup.
 
@@ -195,7 +195,7 @@ See **TODO.md** for full roadmap (Phases 6-11).
  | 10 | Blueprint Graph Editing (needs C++ plugin) | Lower Priority |
  | 11 | Advanced/Research (World Partition, Skeletal, BT, PCG, etc.) | Future |
 
-### Phase 8 Order (Easy → Hard) - Testing Update 2025-12-04
+### Phase 8 Order (Easy → Hard) - Testing Update 2025-12-05
 
 1. ✅ **Asset Search** (`manage_asset` add `search`) - ✅ TESTED 2025-12-04
    - Search by name pattern (wildcards: `*cube*`, `material_*`)
@@ -204,20 +204,20 @@ See **TODO.md** for full roadmap (Phases 6-11).
    - Returns metadata: total count, hasMore, pagination info
    - **Status**: WORKING ✅
 
-2. ✅ **Curves** (`manage_curves`) - ✅ RETURNS PLACEHOLDER (Python not connected yet)
+2. ✅ **Curves** (`manage_curves`) - ✅ CREATE/ADD/EVALUATE wired (import/export pending)
    - Create curve assets (FloatCurve, VectorCurve, TransformCurve)
    - Add keyframes with interpolation settings
    - Evaluate curves at specific times
    - Import/export curve data (CSV/JSON)
-   - **Status**: All 5 actions return placeholder "would be created" responses
-   - **Next Step**: Connect Python templates in `consolidated-tool-handlers.ts`
+   - **Status**: Curve creation plus `add_key`/`evaluate` now operate on the underlying RichCurve data (fix landed Dec 5; rebuild + restart MCP before testing). Import/export remain placeholder-only until dedicated templates are added.
+   - **Next Step**: Implement real import/export scripts.
 
 3. ✅ **GameMode Setup** (`manage_gamemode`) - ✅ RETURNS PLACEHOLDER (Python not connected yet)
    - Create multiplayer game framework (GameMode, GameState, PlayerState, PlayerController)
    - Set default classes for multiplayer projects
    - Configure replication modes (Full, Minimal, ClientPredicted)
    - Setup input with Enhanced Input System
-   - **Status**: All 4 actions return placeholder responses
+   - **Status**: All 4 actions still return placeholder responses (confirmed during Dec 5 tests)
    - **Next Step**: Connect Python templates in `consolidated-tool-handlers.ts`
 
 4. ✅ **Actor Tags** (`manage_tags`) - ✅ RETURNS PLACEHOLDER (Python not connected yet)
@@ -226,7 +226,7 @@ See **TODO.md** for full roadmap (Phases 6-11).
    - Check if actors have specific tags
    - Clear all tags from actors
    - **Features**: AND/OR logic for tag queries, batch operations
-   - **Status**: All 6 actions return placeholder responses
+   - **Status**: All 6 actions still return placeholder responses (confirmed during Dec 5 tests)
    - **Next Step**: Connect Python templates in `consolidated-tool-handlers.ts`
 
 5. ✅ **Splines** (`manage_spline`) - ❌ HAS BUG (Cannot create spline component)
@@ -236,25 +236,26 @@ See **TODO.md** for full roadmap (Phases 6-11).
    - **Next Step**: Debug spline creation Python script
 
 6. ✅ **Component Management** (`manage_component`) - ✅ FULLY WORKING
-   - Add, remove, and list components on placed level actors with attachment/mobility support
-   - **Status**: `get` and `add` actions fully functional
-   - **Tested**: Added StaticMeshComponent to test actor successfully
+   - Add, remove, list, and now edit component properties (Mobility included) on placed level actors.
+   - **Status**: Setter now routes through `set_editor_property` with enum conversion so mobility toggles succeed; rebuild + restart MCP before re-testing to load the new Python helpers.
+   - **Next Step**: None for core actions; future work is ergonomic improvements only.
 
 7. **Phase 7 Tools (Materials, Rendering, Input, Collision)** - ✅ ALL WORKING 2025-12-04
    - All Phase 7 tools verified working: `manage_material`, `manage_rendering`, `manage_input`, `manage_collision`
 
-8. **Widget Text Modification** (`manage_ui`) - ✅ FULLY WORKING 2025-12-04
+8. **Widget Text Modification** (`manage_ui`) - ✅ FULLY WORKING 2025-12-05
    - **FIXED**: Created `manage_ui` tool with proper FText marshaling
    - **Actions**: `set_actor_text` (basic), `set_textrender_text` (styled with color/size/alignment)
-   - **Features**: Unicode text support, RGB color (0.0-1.0 range), font sizing, text alignment
+   - **Features**: Unicode text support, RGB color (0.0-1.0 range), alignment options, large/small font sizes, emoji, long copy
    - **Implementation**: Python-based with proper `unreal.FText()` marshaling
-   - **Status**: Ready for testing with real actors in UE5.7
+   - **Status**: Deep-tested in UE5.7 (Phase8TestText + Phase8Headline) across basic/styled/unicode/long/error scenarios using Quick Iteration Loop.
  
 ### Active Tool Gaps (Dec 2025)
-- `query_level.get_all`/`get_by_*` currently respond with `success` but return empty payloads even when actors exist. Agents must confirm actor labels manually in the editor before running mutating commands and keep this limitation noted in TODO entries.
-- Use `manage_ui` → `set_actor_text` for TextRenderActor text modification. The tool handles FText marshaling properly, unlike the inspect tool.
-- For styled text (color, size, alignment), use `manage_ui` → `set_textrender_text` for full control.
-- When scripting story logic, use `manage_ui` for all text modifications since it properly handles UE5.7 FText format.
+- `query_level.get_all`/`get_by_*` currently respond with `success` but return empty payloads even when actors exist. Agents must confirm actor labels manually.
+- `manage_gamemode` + `manage_tags` still surface placeholder responses only; no UE changes occur yet.
+- `manage_spline.create` returns "Unable to create spline component"; spline authoring is blocked until Python script is fixed.
+- `manage_curves` import/export remain placeholder (create/add/evaluate now fixed once MCP is rebuilt/restarted).
+- `manage_ui` is now the preferred way to author TextRender content (unicode, styled, multi-actor) and is safe to use for story scripting.
  
  
  ## Key UE Systems to Support
@@ -331,11 +332,13 @@ When adding new functionality:
  | **`manage_material`** | Material Instances (Phase 7) | create_instance, set_scalar, set_vector, set_texture, get_parameters, copy | ✅ Tested |
  | **`manage_rendering`** | Rendering Settings (Phase 7) | set_nanite, get_nanite, set_lumen, get_lumen, set_vsm, set_anti_aliasing, set_ray_tracing, set_post_process | ✅ Console commands work |
  | **`manage_collision`** | Collision Settings (Phase 7) | set_profile, set_response, set_enabled, get_settings | ✅ All 4 tested 2025-12-02 |
- | **`manage_curves`** | Curve Assets (Phase 8.2) | create, add_key, evaluate, import, export | ✅ Implemented 2025-12-02 (placeholder) |
- | **`manage_gamemode`** | Game Framework (Phase 8.3) | create_framework, set_default_classes, configure_replication, setup_input | ✅ Implemented 2025-12-02 (placeholder) |
- | **`manage_tags`** | Actor Tags (Phase 8.4) | add, remove, has, get_all, clear, query | ✅ Implemented 2025-12-02 (placeholder) |
- | **`manage_component`** | Component authoring (Phase 8.6) | add, remove, get | ✅ Implemented 2025-12-04 |
- | **`manage_spline`** | Spline authoring (Phase 8.5) | create, add_point, set_point, remove_point, get_points, sample | ✅ Implemented 2025-12-04 |
+ | **`manage_curves`** | Curve Assets (Phase 8.2) | create, add_key, evaluate (Python), import/export (placeholder) | ⚠️ Create works; `add_key`/`evaluate` currently error (`'CurveFloat' object has no attribute add_key/get_keys'`). |
+
+  | **`manage_gamemode`** | Game Framework (Phase 8.3) | create_framework, set_default_classes, configure_replication, setup_input | ✅ Implemented 2025-12-02 (placeholder) |
+  | **`manage_tags`** | Actor Tags (Phase 8.4) | add, remove, has, get_all, clear, query | ✅ Implemented 2025-12-02 (placeholder) |
+  | **`manage_component`** | Component authoring (Phase 8.6) | add, remove, get | ✅ add/get/remove working; `set_property` Mobility writes still pending. |
+  | **`manage_spline`** | Spline authoring (Phase 8.5) | create, add_point, set_point, remove_point, get_points, sample | ❌ `create` fails with "Unable to create spline component" (Dec 5 tests). |
+
 
 
 ## Coordinates & Units
@@ -773,9 +776,9 @@ Implemented three new tools using a **placeholder-first approach**:
 - Users can test tool interfaces while real implementation is added
 
  **New Tools Status:**
-- `manage_curves` (Phase 8.2): Curve asset creation and editing - **All 5 actions implemented**
-- `manage_gamemode` (Phase 8.3): Multiplayer game framework setup - **All 4 actions implemented**
-- `manage_tags` (Phase 8.4): Actor tag management with wildcard queries - **All 6 actions implemented**
+- `manage_curves` (Phase 8.2): Curve asset creation and editing - **Create/Add/Evaluate wired to Python, import/export still placeholder**
+- `manage_gamemode` (Phase 8.3): Multiplayer game framework setup - **All 4 actions implemented (placeholder responses)**
+- `manage_tags` (Phase 8.4): Actor tag management with wildcard queries - **All 6 actions implemented (placeholder responses)**
 
 **Implementation Complete**: All three tools are registered, compiled, and ready for testing after MCP restart.
 
@@ -797,24 +800,21 @@ For Phase 8 tools, we established a **placeholder-first implementation pattern**
 
 ### **Phase 8.2-8.4 Python Templates Roadmap**
 
-**Current Status**: All Phase 8.2-8.4 tools return **placeholder responses** with `warning: 'Tool implementation pending - this is a placeholder'`. Python templates are **ready** in `src/utils/python-templates.ts`.
+**Current Status**: Phase 8.2 (Curves) now uses real Python for create/add/evaluate (verified 2025-12-04). GameMode + Tags still return placeholder responses while their templates wait to be wired. Python templates live in `src/utils/python-templates.ts` for all actions.
 
 **Implementation Roadmap** (Next Steps):
 
-1. **Connect tool handlers to Python templates**:
-   - Update `consolidated-tool-handlers.ts` to use Python templates instead of placeholder responses
-   - For each action, call the appropriate Python template with proper parameter mapping
-   - Handle Python execution results and error cases
+1. **Wire remaining handlers**:
+   - Update `consolidated-tool-handlers.ts` so GameMode/Tags (and Curves import/export) call their Python templates
+   - Ensure structured results propagate correctly
 
 2. **Test real Python execution**:
-   - After connecting handlers, test each action with real UE5.7
-   - Verify Python templates work correctly with UE5.7 API
-   - Fix any UE5.7-specific API issues (enum naming, factory patterns, etc.)
+   - After wiring, test each action in UE5.7 and handle enum/factory quirks
 
 3. **Add missing Python templates**:
-   - `manage_curves`: Need `IMPORT_CURVE` and `EXPORT_CURVE` templates
-   - `manage_gamemode`: Need `CONFIGURE_REPLICATION` and `SETUP_INPUT` templates
-   - Complete the template set for all actions
+   - `manage_curves`: Add `IMPORT_CURVE` / `EXPORT_CURVE`
+   - `manage_gamemode`: Add `CONFIGURE_REPLICATION` / `SETUP_INPUT`
+   - Complete the template set for outstanding actions
 
 **Python Templates Ready** (in `python-templates.ts`):
 - **Curves**: `CREATE_CURVE`, `ADD_CURVE_KEY`, `EVALUATE_CURVE`
@@ -826,10 +826,9 @@ For Phase 8 tools, we established a **placeholder-first implementation pattern**
 - `CONFIGURE_REPLICATION`, `SETUP_INPUT` (for `manage_gamemode`)
 
 **Implementation Priority**:
-1. First: Connect existing Python templates to tool handlers
-2. Second: Test and fix UE5.7 API issues
-3. Third: Add missing Python templates
-4. Fourth: Test all actions end-to-end
+1. Wire existing templates where possible
+2. Add the missing templates
+3. Retest all actions end-to-end
 
 ## Actor Names vs Labels (Important!)
 

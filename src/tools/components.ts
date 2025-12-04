@@ -592,12 +592,40 @@ def json_safe_value(value):
         return list(value)
     return str(value)
 
+def convert_mobility_value(value):
+    if isinstance(value, unreal.ComponentMobility):
+        return value
+    if isinstance(value, str):
+        lookup = value.strip().upper()
+        if lookup in MOBILITY_MAP:
+            return MOBILITY_MAP[lookup]
+    try:
+        numeric = int(value)
+        mapping = {
+            0: unreal.ComponentMobility.STATIC,
+            1: unreal.ComponentMobility.STATIONARY,
+            2: unreal.ComponentMobility.MOVABLE
+        }
+        if numeric in mapping:
+            return mapping[numeric]
+    except Exception:
+        pass
+    return None
+
 def set_property_value(target, prop_name, raw_value, property_path=None, use_editor_property=True):
     warnings = []
     if not target or not prop_name:
         return False, 'Missing target or property name', warnings
     converted = coerce_property_value(raw_value)
     prop_lower = str(prop_name).lower()
+    target_prop_name = prop_name
+    if prop_lower == 'mobility':
+        target_prop_name = 'mobility'
+        mobility_value = convert_mobility_value(converted)
+        if not mobility_value:
+            warnings.append('Invalid mobility value provided; expected Static/Stationary/Movable')
+            return False, 'Invalid mobility value', warnings
+        converted = mobility_value
 
     if prop_lower == 'text' and hasattr(target, 'set_text'):
         try:
@@ -627,18 +655,18 @@ def set_property_value(target, prop_name, raw_value, property_path=None, use_edi
 
     if use_editor_property and hasattr(target, 'set_editor_property'):
         try:
-            target.set_editor_property(prop_name, converted)
+            target.set_editor_property(target_prop_name, converted)
             try:
-                new_val = target.get_editor_property(prop_name)
+                new_val = target.get_editor_property(target_prop_name)
             except Exception:
-                new_val = getattr(target, prop_name, converted)
+                new_val = getattr(target, target_prop_name, converted)
             return True, json_safe_value(new_val), warnings
         except Exception as editor_error:
             warnings.append(f'set_editor_property failed: {editor_error}')
 
     try:
-        setattr(target, prop_name, converted)
-        return True, json_safe_value(getattr(target, prop_name, converted)), warnings
+        setattr(target, target_prop_name, converted)
+        return True, json_safe_value(getattr(target, target_prop_name, converted)), warnings
     except Exception as attr_error:
         return False, f'Unable to set property: {attr_error}', warnings
 

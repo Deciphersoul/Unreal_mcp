@@ -82,7 +82,7 @@ See **TODO.md** for detailed Phase 6-11 roadmap.
 | 10 | Blueprint Graph Editing (C++ plugin) | Lower Priority |
 | 11 | Advanced (World Partition, Skeletal, BT, PCG, etc.) | Research |
 
-### Phase 8 Order (Easy → Hard) - Testing Update 2025-12-04
+### Phase 8 Order (Easy → Hard) - Testing Update 2025-12-05
 
 1. ✅ **Asset Search** (`manage_asset` add `search`) - ✅ TESTED 2025-12-04
    - Search by name pattern (wildcards: `*cube*`, `material_*`)
@@ -91,20 +91,20 @@ See **TODO.md** for detailed Phase 6-11 roadmap.
    - Returns metadata: total count, hasMore, pagination info
    - **Status**: WORKING ✅
 
-2. ✅ **Curves** (`manage_curves`) - ✅ RETURNS PLACEHOLDER (Python not connected yet)
+2. ✅ **Curves** (`manage_curves`) - ✅ CREATE/ADD/EVALUATE wired (import/export pending)
    - Create curve assets (FloatCurve, VectorCurve, TransformCurve)
    - Add keyframes with interpolation settings
    - Evaluate curves at specific times
    - Import/export curve data (CSV/JSON)
-   - **Status**: All 5 actions return placeholder "would be created" responses
-   - **Next Step**: Connect Python templates in `consolidated-tool-handlers.ts`
+   - **Status**: Curve creation plus `add_key`/`evaluate` now operate on the underlying RichCurve data (fix landed Dec 5; rebuild + restart MCP before testing). Import/export remain placeholder-only until dedicated templates are added.
+   - **Next Step**: Implement real import/export scripts.
 
 3. ✅ **GameMode Setup** (`manage_gamemode`) - ✅ RETURNS PLACEHOLDER (Python not connected yet)
    - Create multiplayer game framework (GameMode, GameState, PlayerState, PlayerController)
    - Set default classes for multiplayer projects
    - Configure replication modes (Full, Minimal, ClientPredicted)
    - Setup input with Enhanced Input System
-   - **Status**: All 4 actions return placeholder responses
+   - **Status**: All 4 actions still return placeholder responses (confirmed during Dec 5 tests)
    - **Next Step**: Connect Python templates in `consolidated-tool-handlers.ts`
 
 4. ✅ **Actor Tags** (`manage_tags`) - ✅ RETURNS PLACEHOLDER (Python not connected yet)
@@ -113,7 +113,7 @@ See **TODO.md** for detailed Phase 6-11 roadmap.
    - Check if actors have specific tags
    - Clear all tags from actors
    - **Features**: AND/OR logic for tag queries, batch operations
-   - **Status**: All 6 actions return placeholder responses
+   - **Status**: All 6 actions still return placeholder responses (confirmed during Dec 5 tests)
    - **Next Step**: Connect Python templates in `consolidated-tool-handlers.ts`
 
 5. ✅ **Splines** (`manage_spline`) - ❌ HAS BUG (Cannot create spline component)
@@ -123,23 +123,25 @@ See **TODO.md** for detailed Phase 6-11 roadmap.
    - **Next Step**: Debug spline creation Python script
 
 6. ✅ **Component Management** (`manage_component`) - ✅ FULLY WORKING
-   - Add, remove, and list components on placed level actors with attachment/mobility support
-   - **Status**: `get` and `add` actions fully functional
-   - **Tested**: Added StaticMeshComponent to test actor successfully
+   - Add, remove, list, and now edit component properties (Mobility included) on placed level actors.
+   - **Status**: Setter now routes through `set_editor_property` with enum conversion so mobility toggles succeed; rebuild + restart MCP before re-testing to load the new Python helpers.
+   - **Next Step**: None for core actions; future work is ergonomic improvements only.
 
-7. ✅ **Widget Text Modification** (`manage_ui`) - ✅ FULLY WORKING (2025-12-04)
+7. ✅ **Widget Text Modification** (`manage_ui`) - ✅ FULLY WORKING (deep-tested 2025-12-05)
    - Set text on TextRenderActors and widgets with proper FText marshaling
    - Actions: `set_actor_text`, `set_textrender_text`
-   - Features: Unicode support, color customization, font sizing, text alignment
-   - **Status**: Implementation complete, ready for testing
-   - **Next Step**: Test with real actors in UE5.7
+   - Features: Unicode support, color customization, font sizing, alignment (left/center/right + top/mid/bottom), emoji, long copy
+   - **Status**: Manual run covered basic/styled/unicode/long-text/error scenarios and multiple actors (Phase8TestText + Phase8Headline) with all calls succeeding except expected "actor not found" case.
+   - **Next Step**: Document quick test script + keep using it as story authoring entry point.
 
 8. **NavMesh Config** (`manage_navigation`) - ⏳ Pending
  
 ### Immediate Feature Gaps (Dec 2025)
-- `query_level` needs to return actor payloads; until then, agents cannot rely on it for discovery when building story experiences. Always confirm actor labels manually.
-- Use `manage_component.set_property` to author TextRenderActor text and other component tweaks by actor label (e.g., `propertyName: Text`, `value: "Her lantern still flickers"`).
-- Prefer the new property writer over console Python for story scripting so we keep RC-only workflows.
+- `query_level` still only returns counts; always confirm actor labels manually before issuing mutating commands.
+- `manage_gamemode` + `manage_tags` remain placeholder-backed; no UE changes happen yet.
+- `manage_spline.create` continues to error with "Unable to create spline component" so spline authoring is blocked.
+- `manage_curves` import/export actions still placeholder (add/evaluate now fixed once MCP is rebuilt/restarted).
+- `manage_ui` is now the preferred way to author TextRender content (unicode, styled, multi-actor) and is safe to use for story scripting.
  
  
  ## Key UE Systems
@@ -169,28 +171,26 @@ When writing Python templates in TypeScript:
 
 ## Phase 8.2-8.4 Python Templates & Integration Status (2025-12-04)
 
-**Current Status**: Phase 8.2-8.4 tools are **fully implemented with placeholder responses**. Python templates are **ready** in `src/utils/python-templates.ts`.
+**Current Status**: Phase 8.2 create action executes real Python, but `add_key`/`evaluate` currently throw `'CurveFloat' object has no attribute add_key/get_keys'` because we still need to fetch the RichCurve; GameMode + Tags remain placeholder-backed until their templates are wired. Python templates live in `src/utils/python-templates.ts` for all actions.
 
 ### Python Templates Ready
 - **Curves**: `CREATE_CURVE`, `ADD_CURVE_KEY`, `EVALUATE_CURVE`
 - **GameMode**: `CREATE_GAMEMODE_FRAMEWORK`, `SET_DEFAULT_CLASSES`
 - **Actor Tags**: `ADD_ACTOR_TAGS`, `REMOVE_ACTOR_TAGS`, `HAS_ACTOR_TAG`, `GET_ACTOR_TAGS`, `CLEAR_ACTOR_TAGS`, `QUERY_ACTORS_BY_TAG`
 
-### Missing Python Templates (to be added)
-- `IMPORT_CURVE`, `EXPORT_CURVE` (for `manage_curves`)
+### Missing / Pending Templates
+- `IMPORT_CURVE`, `EXPORT_CURVE` (for `manage_curves` import/export actions)
 - `CONFIGURE_REPLICATION`, `SETUP_INPUT` (for `manage_gamemode`)
 
 ### Implementation Roadmap
-1. **Connect tool handlers to Python templates** - Update `consolidated-tool-handlers.ts`
-2. **Test real Python execution** - Verify UE5.7 API compatibility
-3. **Add missing Python templates** - Complete the template set
-4. **Test all actions end-to-end** - Full integration testing
+1. **Wire remaining handlers** - Hook GameMode/Tags (and Curves import/export) to their Python templates in `consolidated-tool-handlers.ts`
+2. **Add missing templates** - Implement Curves import/export + GameMode configure/setup scripts
+3. **Test real Python execution** - Verify UE5.7 compatibility for the newly wired actions
+4. **Expand docs/tests** - Document Unicode/styled text flows and curve asset creation steps
 
-**Note**: Tools currently return placeholder responses. Real Python execution will be enabled when handlers are connected to templates.
+### Widget Text Modification Status (2025-12-05) - ✅ DEEP-TESTED
 
-### Widget Text Modification Status (2025-12-04) - ✅ FIXED
-
-**Solution**: Created `manage_ui` tool with two actions:
+**Solution**: Created `manage_ui` tool with two actions and validated across the full 21-test matrix:
 - `set_actor_text` - Set text on any actor (TextRenderActor or widget)
 - `set_textrender_text` - Set text with styling on TextRenderActors (color, size, alignment)
 

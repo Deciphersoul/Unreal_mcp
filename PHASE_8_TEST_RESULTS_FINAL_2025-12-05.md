@@ -2,339 +2,103 @@
 
 ## Executive Summary
 
-**Overall Result: 6/7 Tools Passing (85.7%)**
+**Overall Result: Asset search, component authoring (including mobility), curves create/add/evaluate, and widget text all pass; splines stay blocked; GameMode/Tags still placeholder.**
 
-Phase 8 testing completed successfully with the majority of tools working as expected or providing placeholder responses. The component management tool is fully functional, asset search is working perfectly, and all placeholder tools are responding correctly.
-
----
+- ✅ `manage_asset.search` works reliably (no `/Game` static meshes yet, `/Engine` search returned 5/116 results).
+- ✅ `manage_curves` now fetches the underlying RichCurve so create/add/evaluate actions succeed after rebuilding + restarting MCP; import/export remain placeholder.
+- ✅ `manage_component` add/get/remove plus `set_property` (Mobility) succeed thanks to the enum-aware setter.
+- ❌ `manage_spline.create` still returns "Unable to create spline component on '<name>'".
+- ✅ `manage_ui` passed the full 21-case deep test (basic/styled/Unicode/emoji/alignment/multi-actor/error) and should be the go-to workflow for story text.
+- ⚪ `manage_gamemode` / `manage_tags` still emit placeholder responses only—no UE changes occur yet.
 
 ## Test Execution Summary
 
-**Date**: December 5, 2025  
-**Build**: MCP v0.7.1 + UE 5.7  
-**Environment**: TestProjectGenAI (Local)  
-**Build Status**: ✅ Zero errors, clean build
-
----
+- **Date**: December 5, 2025  
+- **Build**: MCP v0.7.1 + UE 5.7  
+- **Environment**: TestProjectGenAI (local)  
+- **Connection**: `debug_extended.check_connection` returned `connected: true (336 ms)`  
+- **Quick Iteration Loop**: `save_level` → `control_editor.play` → `debug_extended.get_errors` (clean) → `control_editor.stop`.
 
 ## Detailed Results
 
-### **8.1 - Asset Search** ✅ WORKING
-
-**Tool**: `manage_asset`  
-**Action**: `search`
-
+### 8.1 – Asset Search ✅
 ```
-Test 1: Search by type and pattern
-  Pattern: *cube*
-  Type: StaticMesh
-  Result: Found 0 assets (total: 0) ✅
-  
-Test 2: Search materials with wildcard
-  Pattern: *
-  Type: Material
-  Limit: 5
-  Result: Found 5 assets (total: 10) ✅
+manage_asset search (pattern "*cube*", type StaticMesh, /Game) → Found 0 assets (project has none yet).
+manage_asset search (pattern "*", type StaticMesh, directory /Engine, limit 5) → Found 5 assets (total 116).
 ```
+Status: Fully working; wildcard/type filters behave as expected. Remember `/Game` searches can legitimately return zero when no user assets exist.
 
-**Status**: FULLY WORKING - Can search assets by name pattern with wildcards and filter by asset type.
-
-**Impact**: Enables asset discovery workflows.
-
----
-
-### **8.2 - Curves** ✅ PLACEHOLDER RESPONDING
-
-**Tool**: `manage_curves`  
-**Action**: `create`
-
+### 8.2 – Curves ✅ (Create/Add/Eval)
 ```
-Test: Create FloatCurve
-  Name: TestCurve
-  Path: /Game/Curves
-  Type: FloatCurve
-  Result: "Curve TestCurve of type FloatCurve would be created at /Game/Curves" ✅
+manage_curves create (Phase8AutoCurve, /Game/Curves, FloatCurve) → success.
+manage_curves add_key (time 0, value 100) → success (RichCurve fallback handles UE5.7 API).
+manage_curves evaluate (time 0.5) → success (returns value + keyCount from RichCurve data).
+manage_curves import/export → placeholder "would be" responses.
 ```
+Status: After rebuilding and restarting the MCP, create/add/eval use the RichCurve data (or per-channel fallbacks) so UE5.7 no longer throws `add_key/get_keys` errors. Import/export templates are still pending.
 
-**Status**: Tool responds correctly with placeholder messages. Python templates are ready in `python-templates.ts` but not yet connected to handlers.
+### 8.3 – GameMode Setup ⚪ Placeholder
+All four actions (`create_framework`, `set_default_classes`, `configure_replication`, `setup_input`) respond with "would be" placeholder text; no UE changes yet. Python handler wiring still pending.
 
-**Next Step**: Connect Python templates in `consolidated-tool-handlers.ts` for real execution.
+### 8.4 – Actor Tags ⚪ Placeholder
+All six actions (`add`, `remove`, `has`, `get_all`, `clear`, `query`) reply with placeholder text ("Would ..."), as confirmed on actor `Phase8TestCube`. Needs Python integration.
 
----
-
-### **8.3 - GameMode Setup** ✅ PLACEHOLDER RESPONDING
-
-**Tool**: `manage_gamemode`  
-**Action**: `create_framework`
-
+### 8.5 – Splines ❌
 ```
-Test: Create game framework
-  Project: TestProject
-  GAS: true
-  CommonUI: true
-  Result: "Game framework would be created for project TestProject" ✅
+manage_spline create (Phase8TestSpline, 3 points) → Failed: "Unable to create spline component on 'Phase8TestSpline'".
 ```
+Status: Original bug persists; spline creation script cannot attach a spline component.
 
-**Status**: Tool responds with placeholder messages. Ready for Python template integration.
-
-**Next Step**: Connect Python templates in `consolidated-tool-handlers.ts`.
-
----
-
-### **8.4 - Actor Tags** ✅ PLACEHOLDER RESPONDING
-
-**Tool**: `manage_tags`  
-**Action**: `add`
-
+### 8.6 – Component Management ✅
 ```
-Test: Add tag to actor
-  Actor: Floor
-  Tag: TestTag
-  Result: "Tag 'TestTag' would be added to actor 'Floor'" ✅
+control_actor spawn (Cube → Phase8TestCube, replaceExisting true) → success.
+manage_component add (StaticMeshComponent named Phase8ExtraMesh) → success (with expected warnings about default mobility/material).
+manage_component get → reports 2 components.
+manage_component set_property (component Phase8ExtraMesh, Mobility → Movable) → success (setter now converts to ComponentMobility enum before using set_editor_property).
+manage_component remove (Phase8ExtraMesh) → success.
 ```
+Status: Add/Get/Remove and Property editing all work; setter upgrades automatically when writing mobility/other component properties. Rebuild + restart MCP before re-testing so UE picks up the new Python helper.
 
-**Status**: Tool responds with placeholder messages. Python templates are ready.
+### 8.7 – Widget Text Modification ✅ (Deep-tested)
+Actors `Phase8TestText` and `Phase8Headline` were spawned and updated through the entire matrix:
+- Basic text overwrite twice ("Hello Phase 8" → "Updated Text").
+- Styled text in red/yellow/blue with different font sizes.
+- Unicode strings: `こんにちは世界`, `English 中文 العربية Ñoño`, emoji string `Game 🎮 Level 🎯 Win 🏆`.
+- Alignment sweeps (left/top, center/center, right/bottom).
+- Multi-actor updates (Phase8Headline styled to gold 150pt, Phase8TestText as subtitle).
+- Error handling (NonExistentPhase8Text) produced the expected failure message.
+- Long text paragraph rendered successfully.
+Status: Tool is production-ready for text authoring; continue using it for story scripting.
 
-**Next Step**: Connect Python templates in `consolidated-tool-handlers.ts`.
-
----
-
-### **8.5 - Splines** ✅ PLACEHOLDER RESPONDING
-
-**Tool**: `manage_spline`  
-**Action**: `create`
-
-```
-Test: Create spline with points
-  Name: TestSpline
-  Points: 2 (0,0,0 and 100,100,100)
-  Result: "Spline 'TestSpline' ready with 2 points" ✅
-```
-
-**Status**: NOW RESPONDING with placeholder message (previously was failing). Tool has been updated to return valid responses.
-
-**Previous Issue**: "Unable to create spline component" error - appears to have been resolved in placeholder implementation.
-
-**Next Step**: Verify actual spline creation works when Python templates are connected.
-
----
-
-### **8.6 - Component Management** ✅ FULLY WORKING
-
-**Tool**: `manage_component`
-
-#### Test 1: Spawn Actor
-```
-Action: spawn via control_actor
-  Class: Engine/BasicShapes/Cube
-  Name: TestComponentCube
-  Location: (500, 500, 100)
-  Result: ✅ SUCCESS - "Spawned TestComponentCube at (500.0, 500.0, 100.0)"
-```
-
-#### Test 2: Add Component
-```
-Action: add
-  Actor: TestComponentCube
-  Component: SceneComponent
-  Name: TestSceneComponent
-  Result: ✅ SUCCESS - "Component 'TestSceneComponent' added to 'TestComponentCube'"
-```
-
-#### Test 3: Get Components
-```
-Action: get
-  Actor: TestComponentCube
-  Result: ✅ SUCCESS - "Found 2 components on 'TestComponentCube'"
-  (Root StaticMeshComponent + added SceneComponent)
-```
-
-#### Test 4: Remove Component
-```
-Action: remove
-  Actor: TestComponentCube
-  Component: TestSceneComponent
-  Result: ✅ SUCCESS - "Component 'SceneComponent_0' removed from 'TestComponentCube'"
-```
-
-#### Test 5: Verify Removal
-```
-Action: get (after remove)
-  Actor: TestComponentCube
-  Result: ✅ SUCCESS - "Found 1 components on 'TestComponentCube'"
-  (Only root StaticMeshComponent remains)
-```
-
-**Status**: **FULLY FUNCTIONAL**. All 4 actions (add, get, remove) working correctly with proper state management.
-
-**Impact**: Enables runtime component management for dynamic actor configuration.
-
----
-
-### **8.7 - Widget Text Modification** ⚠️ PARTIAL RESPONSE
-
-**Tool**: `manage_ui`  
-**Actions**: `set_actor_text`, `set_textrender_text`
-
-#### Test 1: Set Actor Text
-```
-Action: set_actor_text
-  Actor: TestTextActor
-  Text: "Phase 8 Testing ✅ Widget Text Works!"
-  Result: ❌ FAILED - "Failed to update text | failed"
-```
-
-#### Test 2: Set TextRender Text with Styling
-```
-Action: set_textrender_text
-  Actor: TestTextActor
-  Text: "Hello Phase 8! 🎮 日本語"
-  FontSize: 48
-  Color: RGB(1, 0.5, 0)
-  Result: ❌ FAILED - "Failed to update TextRender text | failed"
-```
-
-#### Test 3: Component Property Access
-```
-Action: manage_component set_property
-  Actor: TestTextActor
-  Property: Text
-  Value: "Phase 8 Testing! ✅"
-  Result: ❌ FAILED - "Object has no attribute 'Text'"
-  Note: Property is on TextRenderComponent, not actor
-```
-
-**Status**: Tool exists but needs debugging. The issue appears to be with how the TextRenderComponent's text property is being accessed.
-
-**Issue**: TextRenderComponent property access path may be incorrect for FText marshaling in UE5.7.
-
-**Next Step**: 
-1. Debug Python template for FText conversion
-2. Verify component property path is correct
-3. Test with actual TextRenderComponent instance
-
-**Workaround**: Component management tool can theoretically access component properties via `set_property` action if property path is corrected.
-
----
+### Quick Loop Validation ✅
+After finishing tool calls, ran the standard loop: `editor_lifecycle.save_level` → `control_editor.play` → `debug_extended.get_errors` (no new errors) → `control_editor.stop`.
 
 ## Testing Statistics
 
-| Metric | Value |
-|--------|-------|
-| Total Tools Tested | 7 |
-| Fully Working | 2 (Asset Search, Components) |
-| Placeholder Responding | 4 (Curves, GameMode, Tags, Splines) |
-| Partially Working | 1 (Widget Text) |
-| **Success Rate** | **85.7%** |
+| Category | Tools |
+|----------|-------|
+| ✅ Fully Working | 8.1 Asset Search, 8.2 Curves (create/add/eval), 8.6 Component Management, 8.7 Widget Text |
+| ⚠️ Partial / Needs Fix | 8.2 import/export actions (placeholder) |
+| ⚪ Placeholder Only | 8.3 GameMode, 8.4 Tags |
+| ❌ Broken | 8.5 Splines |
 
----
+## Phase 8 Status Snapshot
+- **Complete/Healthy**: Asset Search, Curves (create/add/eval), Component authoring (add/get/remove/set_property), Widget Text pipeline.
+- **Placeholder**: GameMode + Tags (await Python wiring), Curves import/export actions.
+- **Blocked**: Splines create (component creation failure).
+- **Outstanding**: Curves import/export templates, GameMode replication/input wiring, Spline component creation fix.
 
-## Phase 8 Completion Status
+## Key Findings & Next Steps
+1. **Curves** – RichCurve routing is fixed for create/add/eval (requires MCP rebuild + restart); remaining work is implementing real import/export templates.
+2. **Component Setter** – mobility/property updates succeed via enum-aware `set_editor_property`; no further action unless new component types need special handling.
+3. **Splines** – still failing to create the spline component; investigate the Python helper (`get_spline_component`) and ensure the actor actually ends up with a registered SplineComponent.
+4. **GameMode/Tags Wiring** – hook handlers to their existing templates so actions perform real UE work.
+5. **Docs** – keep recommending `manage_ui` for any TextRender/Widget authoring since it is now proven reliable.
 
-### ✅ Complete & Tested
-- **8.1** Asset Search - FULLY WORKING
-- **8.6** Component Management - FULLY WORKING
-
-### ✅ Implemented & Responding
-- **8.2** Curves - Placeholder responses
-- **8.3** GameMode - Placeholder responses
-- **8.4** Tags - Placeholder responses
-- **8.5** Splines - Now responding (was failing)
-
-### ⚠️ Needs Work
-- **8.7** Widget Text - Tool exists but property access needs fixing
-
-### ⏳ Not Yet Implemented
-- **8.8** NavMesh Configuration
-
----
-
-## Key Achievements
-
-1. **Asset Search Works** - Users can now discover assets by pattern and type
-2. **Component Management Fully Functional** - Runtime component manipulation possible
-3. **All Placeholder Tools Responding** - No unexpected errors
-4. **Spline Tool Fixed** - No longer throwing errors
-5. **Build Quality** - Zero compilation errors
-
----
-
-## Discovered Issues & Next Steps
-
-### Priority 1: Widget Text Property Access
-- **Issue**: TextRenderComponent FText property not accessible through current method
-- **Impact**: Story authoring/narrative features blocked
-- **Fix Required**: Debug Python template, verify FText marshaling
-- **Estimated Time**: 30-45 minutes
-
-### Priority 2: Python Template Integration
-- **Issue**: Curves, GameMode, Tags have Python templates but not connected to handlers
-- **Impact**: Tools return placeholders instead of real results
-- **Fix Required**: Update `consolidated-tool-handlers.ts` to call Python templates
-- **Estimated Time**: 1-2 hours
-
-### Priority 3: Spline Verification
-- **Issue**: Spline now returns placeholder but actual creation untested
-- **Impact**: Spline-based level design not yet validated
-- **Fix Required**: Test actual spline creation after Python integration
-- **Estimated Time**: 20-30 minutes
-
----
-
-## Code Quality Assessment
-
-### Build Status
-- **TypeScript Compilation**: ✅ Zero errors
-- **Build Time**: ~3 seconds
-- **Test Execution**: ~5 minutes
-
-### Files Modified This Session
-- No new files created
-- No breaking changes
-- No technical debt introduced
-
----
-
-## Recommendations
-
-### For Phase 8 Completion
-1. **Immediate** (30 min): Fix Widget Text component property access
-2. **Next** (1-2 hours): Connect Python templates for Curves, GameMode, Tags
-3. **Verify** (30 min): Test spline creation after Python integration
-
-### For Phase 9 Planning
-- Consider GAS runtime management (attribute get/set, ability granting)
-- Consider CommonUI runtime stack management
-- Prioritize these for multiplayer game development
-
----
-
-## Test Artifacts
-
-**Build Artifacts**:
-- `dist/` - Compiled MCP code
-- `package.json` - Build configuration
-
-**Test Environment**:
-- UE 5.7 (Local TestProjectGenAI)
-- RC Port: 30010
-- No Python required for these tests
-
----
+## Artifacts
+- Build: `npm run build` succeeded prior to testing.
+- UE Actions: All commands executed against UE5.7 TestProjectGenAI via RC HTTP 30010.
+- Test Log: Commands listed in this report; Quick Iteration Loop completed without warnings.
 
 ## Conclusion
-
-**Phase 8 is 85.7% complete with 6 of 7 tools working or responding correctly.**
-
-The major achievement is **Asset Search** (fully working) and **Component Management** (fully working). The placeholder tools (Curves, GameMode, Tags, Splines) are all responding correctly and just need Python template integration.
-
-**The only blocker is Widget Text** which needs debugging of the TextRenderComponent property access. This is a high-priority fix given its importance for story-driven level design.
-
-**Recommendation**: Focus on Widget Text fix and Python template integration in next session. Both are doable within 2-3 hours.
-
----
-
-**Status**: 🟢 **READY FOR NEXT PHASE**  
-**Confidence**: ⭐⭐⭐⭐ (4/5)  
-**Date**: December 5, 2025
-
+Phase 8 medium features remain in-progress. Asset Search, Curves (create/add/eval), Component orchestration (including mobility edits), and the widget text pipeline are battle-tested. The main blockers are Splines (no spline component yet) plus the placeholder-backed GameMode/Tags flow and missing curve import/export scripts. Addressing those remaining gaps clears the path to call Phase 8 complete.
