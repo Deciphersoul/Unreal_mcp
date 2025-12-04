@@ -179,8 +179,10 @@ export async function handleConsolidatedToolCall(
               classPath,
               location: args.location,
               rotation: args.rotation,
-              actorName: actorNameInput
+              actorName: actorNameInput,
+              replaceExisting: args.replaceExisting === true
             });
+
             return cleanObject(res);
           }
           case 'delete': {
@@ -2735,8 +2737,185 @@ case 'inspect':
             throw new Error(`Unknown manage_tags action: ${args.action}`);
         }
 
+      // 27. SPLINE TOOLS - Phase 8.5
+      case 'manage_spline':
+        switch (requireAction(args)) {
+          case 'create': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide details for manage_spline.create',
+              {
+                name: {
+                  type: 'string',
+                  title: 'Spline Name',
+                  description: 'Name/label for the spline actor'
+                }
+              }
+            );
+            const name = requireNonEmptyString(args.name, 'name', 'Missing required parameter: name');
+            const res = await tools.splineTools.createSpline({
+              name,
+              location: args.location,
+              rotation: args.rotation,
+              points: Array.isArray(args.points) ? args.points : undefined,
+              closedLoop: args.closedLoop === true,
+              replaceExisting: args.replaceExisting === true,
+              space: typeof args.space === 'string' ? args.space : undefined
+            });
+            return cleanObject(res);
+          }
+          case 'add_point': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide details for manage_spline.add_point',
+              {
+                actorName: {
+                  type: 'string',
+                  title: 'Actor Name',
+                  description: 'Spline actor label to add the point to'
+                }
+              }
+            );
+            const actorName = requireNonEmptyString(args.actorName, 'actorName', 'Missing required parameter: actorName');
+            requireVector3Components(args.location, 'Missing required parameter: location (x, y, z)');
+            const res = await tools.splineTools.addPoint({
+              actorName,
+              location: args.location,
+              pointIndex: args.pointIndex,
+              tangent: args.tangent,
+              pointType: args.pointType,
+              space: typeof args.space === 'string' ? args.space : undefined,
+              updateSpline: args.updateSpline
+            });
+            return cleanObject(res);
+          }
+          case 'set_point': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide details for manage_spline.set_point',
+              {
+                actorName: {
+                  type: 'string',
+                  title: 'Actor Name',
+                  description: 'Spline actor label to modify'
+                },
+                pointIndex: {
+                  type: 'number',
+                  title: 'Point Index',
+                  description: 'Zero-based point index to update'
+                }
+              }
+            );
+            const actorName = requireNonEmptyString(args.actorName, 'actorName', 'Missing required parameter: actorName');
+            if (args.pointIndex === undefined || args.pointIndex === null) {
+              throw new Error('Missing required parameter: pointIndex');
+            }
+            if (!args.location && !args.tangent && !args.arriveTangent && !args.leaveTangent && !args.pointType) {
+              throw new Error('Provide at least one of location, tangent, arriveTangent, leaveTangent, or pointType to update a spline point');
+            }
+            const res = await tools.splineTools.updatePoint({
+              actorName,
+              pointIndex: args.pointIndex,
+              location: args.location,
+              tangent: args.tangent,
+              arriveTangent: args.arriveTangent,
+              leaveTangent: args.leaveTangent,
+              pointType: args.pointType,
+              space: typeof args.space === 'string' ? args.space : undefined,
+              updateSpline: args.updateSpline
+            });
+            return cleanObject(res);
+          }
+          case 'remove_point': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide details for manage_spline.remove_point',
+              {
+                actorName: {
+                  type: 'string',
+                  title: 'Actor Name',
+                  description: 'Spline actor label to modify'
+                },
+                pointIndex: {
+                  type: 'number',
+                  title: 'Point Index',
+                  description: 'Zero-based point index to remove'
+                }
+              }
+            );
+            const actorName = requireNonEmptyString(args.actorName, 'actorName', 'Missing required parameter: actorName');
+            if (args.pointIndex === undefined || args.pointIndex === null) {
+              throw new Error('Missing required parameter: pointIndex');
+            }
+            const res = await tools.splineTools.removePoint({
+              actorName,
+              pointIndex: args.pointIndex,
+              updateSpline: args.updateSpline
+            });
+            return cleanObject(res);
+          }
+          case 'get_points': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide details for manage_spline.get_points',
+              {
+                actorName: {
+                  type: 'string',
+                  title: 'Actor Name',
+                  description: 'Spline actor label to inspect'
+                }
+              }
+            );
+            const actorName = requireNonEmptyString(args.actorName, 'actorName', 'Missing required parameter: actorName');
+            const res = await tools.splineTools.getPoints({
+              actorName,
+              space: typeof args.space === 'string' ? args.space : undefined
+            });
+            return cleanObject(res);
+          }
+          case 'sample': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide details for manage_spline.sample',
+              {
+                actorName: {
+                  type: 'string',
+                  title: 'Actor Name',
+                  description: 'Spline actor label to sample'
+                }
+              }
+            );
+            const actorName = requireNonEmptyString(args.actorName, 'actorName', 'Missing required parameter: actorName');
+            const distance = typeof args.distance === 'number'
+              ? args.distance
+              : (typeof args.distance === 'string' && args.distance.trim() !== '' ? Number(args.distance) : undefined);
+            const inputKey = typeof args.inputKey === 'number'
+              ? args.inputKey
+              : (typeof args.inputKey === 'string' && args.inputKey.trim() !== '' ? Number(args.inputKey) : undefined);
+            if (distance === undefined && inputKey === undefined) {
+              throw new Error('Provide distance or inputKey to sample a spline');
+            }
+            const res = await tools.splineTools.sampleSpline({
+              actorName,
+              distance,
+              inputKey,
+              space: typeof args.space === 'string' ? args.space : undefined
+            });
+            return cleanObject(res);
+          }
+          default:
+            throw new Error(`Unknown manage_spline action: ${args.action}`);
+        }
+ 
       default:
         throw new Error(`Unknown consolidated tool: ${name}`);
+
     }
 
 // All cases return (or throw) above; this is a type guard for exhaustiveness.

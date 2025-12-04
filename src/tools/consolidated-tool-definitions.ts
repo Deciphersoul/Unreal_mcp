@@ -99,7 +99,9 @@ Supported actions: spawn, delete, transform, batch_spawn, set_material, apply_fo
         },
         // Common
         actorName: { type: 'string', description: 'Actor label/name. Required for delete, transform, set_material. Optional for spawn (auto-generated if not provided).' },
+        replaceExisting: { type: 'boolean', description: 'If true, delete any existing actor with the requested name before spawning.' },
         classPath: { 
+
           type: 'string', 
           description: 'Actor class (e.g., "StaticMeshActor", "CameraActor") OR asset path (e.g., "/Engine/BasicShapes/Cube", "/Game/MyMesh"). Required for spawn and batch_spawn actions.'
         },
@@ -626,7 +628,9 @@ Supported actions: profile, show_fps, set_quality, play_sound, create_widget, sh
           type: 'string',
           description: 'Widget blueprint type or category (HUD, Menu, Dialog, Notification, etc.). Optional for create_widget, helps categorize the widget.'
         },
+        savePath: { type: 'string', description: 'Optional content path where the widget asset will be saved (defaults to /Game/UI/Widgets).' },
         visible: { type: 'boolean', description: 'Whether widget should be visible (true) or hidden (false). Required for show_widget action.' },
+
         // Screenshot
         resolution: { type: 'string', description: 'Screenshot resolution in WIDTHxHEIGHT format (e.g., "1920x1080", "3840x2160"). Optional for screenshot action, uses viewport size if not specified.' },
         // Engine lifecycle
@@ -2089,6 +2093,238 @@ Supported actions: add, remove, has, get_all, clear, query.`,
         hasTag: { type: 'boolean', description: 'Whether actor has the tag (for has action)' },
         actors: { type: 'array', items: { type: 'string' }, description: 'List of actor names matching query' },
         count: { type: 'number', description: 'Number of actors/tags' },
+        error: { type: 'string', description: 'Error message if failed' }
+      }
+    }
+  },
+
+  // 27. SPLINE TOOLS - Phase 8.5
+  {
+    name: 'manage_spline',
+    description: `Spline authoring toolkit for creating and editing spline actors.
+
+Use it when you need to:
+- create a spline actor with predefined points.
+- add, update, or remove spline control points.
+- inspect spline point data (location, tangents).
+- sample a spline at a distance or spline input key.
+
+Supported actions: create, add_point, set_point, remove_point, get_points, sample.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action: {
+          type: 'string',
+          enum: ['create', 'add_point', 'set_point', 'remove_point', 'get_points', 'sample'],
+          description: 'Spline action to perform'
+        },
+        name: { type: 'string', description: 'Spline actor name for create action.' },
+        actorName: { type: 'string', description: 'Existing spline actor label/name for point operations.' },
+        location: {
+          type: 'object',
+          description: 'World space location (x, y, z). Required for add_point and optional for create.',
+          properties: {
+            x: { type: 'number', description: 'X coordinate' },
+            y: { type: 'number', description: 'Y coordinate' },
+            z: { type: 'number', description: 'Z coordinate' }
+          }
+        },
+        rotation: {
+          type: 'object',
+          description: 'World rotation (pitch, yaw, roll) for create action.',
+          properties: {
+            pitch: { type: 'number', description: 'Pitch in degrees' },
+            yaw: { type: 'number', description: 'Yaw in degrees' },
+            roll: { type: 'number', description: 'Roll in degrees' }
+          }
+        },
+        points: {
+          type: 'array',
+          description: 'Point definitions for create action.',
+          items: {
+            type: 'object',
+            properties: {
+              location: {
+                type: 'object',
+                description: 'Point location (x, y, z)',
+                properties: {
+                  x: { type: 'number' },
+                  y: { type: 'number' },
+                  z: { type: 'number' }
+                }
+              },
+              tangent: {
+                type: 'object',
+                description: 'Optional tangent direction (x, y, z)',
+                properties: {
+                  x: { type: 'number' },
+                  y: { type: 'number' },
+                  z: { type: 'number' }
+                }
+              },
+              pointType: {
+                type: 'string',
+                description: 'Spline point type (Linear, Curve, Constant, CurveClamped)'
+              }
+            }
+          }
+        },
+        pointIndex: {
+          type: 'number',
+          description: 'Zero-based point index for set_point/remove_point or insertion index for add_point.'
+        },
+        tangent: {
+          type: 'object',
+          description: 'Tangent vector (x, y, z) for add_point or set_point.',
+          properties: {
+            x: { type: 'number' },
+            y: { type: 'number' },
+            z: { type: 'number' }
+          }
+        },
+        arriveTangent: {
+          type: 'object',
+          description: 'Arrive tangent override for set_point.',
+          properties: {
+            x: { type: 'number' },
+            y: { type: 'number' },
+            z: { type: 'number' }
+          }
+        },
+        leaveTangent: {
+          type: 'object',
+          description: 'Leave tangent override for set_point.',
+          properties: {
+            x: { type: 'number' },
+            y: { type: 'number' },
+            z: { type: 'number' }
+          }
+        },
+        pointType: {
+          type: 'string',
+          description: 'Spline point type (Linear, Curve, Constant, CurveClamped).'
+        },
+        space: {
+          type: 'string',
+          enum: ['World', 'Local'],
+          description: 'Coordinate space for point operations (default: World).'
+        },
+        closedLoop: {
+          type: 'boolean',
+          description: 'Whether the created spline should be closed.'
+        },
+        replaceExisting: {
+          type: 'boolean',
+          description: 'If true, delete any existing actor with the same name before create.'
+        },
+        updateSpline: {
+          type: 'boolean',
+          description: 'Whether to update the spline after point edits (default: true).'
+        },
+        distance: {
+          type: 'number',
+          description: 'Distance along spline (cm) for sample action.'
+        },
+        inputKey: {
+          type: 'number',
+          description: 'Spline input key (0-1) for sample action.'
+        }
+      },
+      required: ['action']
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', description: 'Whether the operation succeeded' },
+        message: { type: 'string', description: 'Status message' },
+        actorName: { type: 'string', description: 'Spline actor name' },
+        actorPath: { type: 'string', description: 'Actor path in the level' },
+        pointIndex: { type: 'number', description: 'Point index affected by the operation' },
+        pointCount: { type: 'number', description: 'Total point count on the spline' },
+        pointsAdded: { type: 'number', description: 'Number of points created during create/add actions' },
+        points: {
+          type: 'array',
+          description: 'List of spline points (for get_points).',
+          items: {
+            type: 'object',
+            properties: {
+              index: { type: 'number' },
+              location: {
+                type: 'object',
+                properties: {
+                  x: { type: 'number' },
+                  y: { type: 'number' },
+                  z: { type: 'number' }
+                }
+              },
+              tangent: {
+                type: 'object',
+                properties: {
+                  x: { type: 'number' },
+                  y: { type: 'number' },
+                  z: { type: 'number' }
+                }
+              },
+              arriveTangent: {
+                type: 'object',
+                properties: {
+                  x: { type: 'number' },
+                  y: { type: 'number' },
+                  z: { type: 'number' }
+                }
+              },
+              leaveTangent: {
+                type: 'object',
+                properties: {
+                  x: { type: 'number' },
+                  y: { type: 'number' },
+                  z: { type: 'number' }
+                }
+              },
+              distance: { type: 'number', description: 'Distance along spline at this point' },
+              pointType: { type: 'string', description: 'Spline point type' }
+            }
+          }
+        },
+        location: {
+          type: 'object',
+          description: 'Location returned by create/sample actions',
+          properties: {
+            x: { type: 'number' },
+            y: { type: 'number' },
+            z: { type: 'number' }
+          }
+        },
+        direction: {
+          type: 'object',
+          description: 'Forward direction vector returned by sample',
+          properties: {
+            x: { type: 'number' },
+            y: { type: 'number' },
+            z: { type: 'number' }
+          }
+        },
+        upVector: {
+          type: 'object',
+          description: 'Up vector returned by sample',
+          properties: {
+            x: { type: 'number' },
+            y: { type: 'number' },
+            z: { type: 'number' }
+          }
+        },
+        rotation: {
+          type: 'object',
+          description: 'Rotation returned by sample',
+          properties: {
+            pitch: { type: 'number' },
+            yaw: { type: 'number' },
+            roll: { type: 'number' }
+          }
+        },
+        distance: { type: 'number', description: 'Distance used for sampling' },
+        inputKey: { type: 'number', description: 'Input key used for sampling' },
+        sampleMode: { type: 'string', description: 'Indicates whether sampling used distance or inputKey' },
         error: { type: 'string', description: 'Error message if failed' }
       }
     }

@@ -209,7 +209,8 @@ All 12 sequence actions passing:
  | 8.2 | **Curves** | `manage_curves` | Float/color curves, custom enums | **Easy** | ✅ **Implemented 2025-12-02** (all 5 actions, placeholder + Python templates ready) |
 | 8.3 | **GameMode Setup** | `manage_gamemode` | Rules, spawning, player controllers | **Easy** | ✅ **Implemented 2025-12-02** (all 4 actions, placeholder + Python templates ready) |
 | 8.4 | **Actor Tags** | `manage_tags` | `add_tag`, `remove_tag`, `get_by_tag`, `has_tag` | **Easy** | ✅ **Implemented 2025-12-02** (all 6 actions, placeholder + Python templates ready) |
-| 8.5 | **Splines** | `manage_spline` | Create/edit splines, get points, sample | **Easy-Medium** | Pending |
+| 8.5 | **Splines** | `manage_spline` | Create/edit splines, get points, sample | **Easy-Medium** | ✅ Implemented 2025-12-03 (create/add/set/remove/sample actions) |
+
 | 8.6 | **Component Management** | `manage_component` | `add`, `remove`, `get_components` on actors | **Medium** | Pending |
 | 8.7 | **DataTables** | `manage_datatable` | Create, edit rows, import CSV | **Medium** | Pending |
 | 8.8 | **NavMesh Config** | `manage_navigation` | Nav volumes, areas, modifiers, agents | **Medium-Hard** | Pending |

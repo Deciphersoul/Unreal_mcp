@@ -269,7 +269,34 @@ manage_blueprint action:add_component name:BP_MyActor componentType:StaticMeshCo
 
 ---
 
-### 9. create_effect
+### 9. manage_spline
+Spline authoring toolkit.
+
+| Action | Required Params | Optional Params | Description |
+|--------|----------------|-----------------|-------------|
+| `create` | `name` | `location`, `rotation`, `points`, `closedLoop`, `replaceExisting`, `space` | Spawn a spline actor with optional initial points |
+| `add_point` | `actorName`, `location` | `pointIndex`, `tangent`, `pointType`, `space`, `updateSpline` | Insert a spline control point |
+| `set_point` | `actorName`, `pointIndex` | `location`, `tangent`, `arriveTangent`, `leaveTangent`, `pointType`, `space`, `updateSpline` | Modify an existing point |
+| `remove_point` | `actorName`, `pointIndex` | `updateSpline` | Delete a control point |
+| `get_points` | `actorName` | `space` | Return point data (locations, tangents, distances) |
+| `sample` | `actorName`, (`distance` or `inputKey`) | `space` | Sample spline position/direction |
+
+**Examples:**
+```
+# Create a spline with two points
+manage_spline action:create name:MCP_Spline_Test location:{x:0,y:0,z:0} points:[
+  {location:{x:0,y:0,z:0}},
+  {location:{x:200,y:0,z:100}, tangent:{x:100,y:0,z:0}, pointType:Curve}
+]
+
+# Add and sample a point
+manage_spline action:add_point actorName:MCP_Spline_Test location:{x:300,y:0,z:150}
+manage_spline action:sample actorName:MCP_Spline_Test distance:100
+```
+
+---
+
+### 10. create_effect
 Visual effects and debug shapes.
 
 | Action | Required Params | Optional Params | Description |
@@ -289,7 +316,7 @@ create_effect action:particle effectType:Fire location:{x:0,y:0,z:0}
 
 ---
 
-### 10. debug_extended
+### 11. debug_extended
 Error tracking and diagnostics.
 
 | Action | Description |
@@ -317,7 +344,7 @@ debug_extended action:get_log category:LogBlueprint lines:50
 
 ---
 
-### 11. editor_lifecycle
+### 12. editor_lifecycle
 Editor state and save operations.
 
 | Action | Description |
@@ -336,7 +363,7 @@ Editor state and save operations.
 
 ---
 
-### 12. system_control
+### 13. system_control
 Performance and system utilities.
 
 | Action | Required Params | Description |
@@ -349,7 +376,7 @@ Performance and system utilities.
 
 ---
 
-### 13. project_build
+### 14. project_build
 Packaging and builds.
 
 | Action | Required Params | Description |
@@ -363,7 +390,7 @@ Packaging and builds.
 
 ---
 
-### 14. console_command
+### 15. console_command
 Direct console access (with safety checks).
 
 **Example:**

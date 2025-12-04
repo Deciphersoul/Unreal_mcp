@@ -2,8 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+### Added - Phase 8.5: Splines
+- New tool: `manage_spline` for authoring spline actors (create, add_point, set_point, remove_point, get_points, sample).
+- Python-backed spline operations with Remote Control fallback, including tangent editing and sampling by distance/input key.
+- Documentation and automated tests for spline workflows in `docs/unreal-tool-test-cases.md` and `tests/run-unreal-tool-tests.mjs`.
+
 ## [0.7.1] - 2025-12-02
 ### Added - Phase 8.1: Asset Search
+
 
 #### Enhanced Tool: `manage_asset` - Added `search` action
 - `search`: Search assets with filters (name pattern, asset type, directory, recursive)

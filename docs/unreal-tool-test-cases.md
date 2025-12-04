@@ -37,7 +37,8 @@ These scenarios feed the automated harness in `tests/run-unreal-tool-tests.mjs`.
 | 1 | Spawn cube actor for MCP smoke test | `{"action":"spawn","classPath":"/Engine/BasicShapes/Cube","name":"MCP_Cube_A"}` | Success response indicates the actor spawned. |
 | 2 | Delete previously spawned actor | `{"action":"delete","actorName":"MCP_Cube_A"}` | Success response reports the actor delete. |
 | 3 | Spawn without class path returns validation error | `{"action":"spawn"}` | Error message states that `classPath` is required. |
-| 4 | Spawn cube actor with transform override | `{"action":"spawn","classPath":"/Engine/BasicShapes/Cube","name":"MCP_Cube_B","location":[0,100,300],"rotation":[0,45,0]}` | Success response confirms the actor spawn using the provided transform. |
+| 4 | Spawn cube actor with transform override | `{"action":"spawn","classPath":"/Engine/BasicShapes/Cube","name":"MCP_Cube_B","location":[0,100,300],"rotation":[0,45,0],"replaceExisting":true}` | Success response confirms the actor spawn using the provided transform. |
+
 | 5 | Delete missing actor returns error | `{"action":"delete","actorName":"MCP_Cube_Missing"}` | Error message notes that the actor could not be found. |
 
 ---
@@ -197,11 +198,22 @@ Additional advanced blueprint scenarios remain documented in the legacy matrix f
 | 3 | Play sound at location missing asset fails | `{"action":"play_sound","soundPath":"/Game/MCP/Audio/Missing","location":{"x":0,"y":0,"z":0}}` | Error message reports that the sound asset could not be found for the world location playback. |
 | 4 | Play sound with empty path fails validation | `{"action":"play_sound","soundPath":"","volume":1.0}` | Error message explains that the sound asset path could not be resolved. |
 | 5 | Read Output Log tail with defaults | `{"action":"read_log","lines":50,"filter_level":"All"}` | Success response returns recent log entries and the logPath used. |
-| 6 | Read Output Log filtered by custom categories | `{"action":"read_log","filter_category":"LogMyCategory,LogOtherLog","filter_level":"Error","lines":100}` | Success response returns only matching categories at Error level. |
+
+---
+
+## Spline Tools (`src/tools/spline.ts`)
+
+| # | Scenario | Example Input Payload | Expected Outcome |
+|---|----------|-----------------------|------------------|
+| 1 | Create spline actor with initial points | `{"action":"create","name":"MCP_Spline_Test","location":{"x":0,"y":0,"z":0},"points":[{"location":{"x":0,"y":0,"z":0}},{"location":{"x":200,"y":0,"z":100},"tangent":{"x":100,"y":0,"z":0},"pointType":"Curve"}]}` | Success response confirms spline actor was created with 2 points. |
+| 2 | Add third spline point 300 units out | `{"action":"add_point","actorName":"MCP_Spline_Test","location":{"x":300,"y":0,"z":150}}` | Success response reports the point index added and the updated count. |
+| 3 | Get spline points summary | `{"action":"get_points","actorName":"MCP_Spline_Test"}` | Success response lists all spline points with location and tangents. |
+| 4 | Sample spline 100 units along distance | `{"action":"sample","actorName":"MCP_Spline_Test","distance":100}` | Success response returns sampled location, direction, and rotation at the requested distance. |
 
 ---
 
 ## Debug Tools (`src/tools/debug.ts`)
+
 
 | # | Scenario | Example Input Payload | Expected Outcome |
 |---|----------|-----------------------|------------------|

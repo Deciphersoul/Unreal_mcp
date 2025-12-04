@@ -37,8 +37,10 @@ const defaultDocPath = path.resolve(repoRoot, 'docs', 'unreal-tool-test-cases.md
 const docPath = path.resolve(repoRoot, process.env.UNREAL_MCP_TEST_DOC ?? defaultDocPath);
 const reportsDir = path.resolve(repoRoot, 'tests', 'reports');
 const resultsPath = path.join(reportsDir, `unreal-tool-test-results-${new Date().toISOString().replace(/[:]/g, '-')}.json`);
-const defaultFbxDir = normalizeWindowsPath(process.env.UNREAL_MCP_FBX_DIR ?? 'C:\\Users\\micro\\Downloads\\Compressed\\fbx');
+const fallbackFbxDir = path.join(repoRoot, 'tests', 'fixtures', 'fbx');
+const defaultFbxDir = normalizeWindowsPath(process.env.UNREAL_MCP_FBX_DIR ?? fallbackFbxDir);
 const defaultFbxFile = normalizeWindowsPath(process.env.UNREAL_MCP_FBX_FILE ?? path.join(defaultFbxDir, 'test_model.fbx'));
+
 
 const cliOptions = parseCliOptions(process.argv.slice(2));
 const serverCommand = process.env.UNREAL_MCP_SERVER_CMD ?? 'node';
@@ -593,7 +595,17 @@ function enrichTestCase(rawCase) {
         arguments: payloadValue
       };
     }
+    case 'Spline Tools': {
+      if (!payloadValue) return { ...base, skipReason: 'No JSON payload provided' };
+      if (!payloadValue.action) return { ...base, skipReason: 'Missing action in payload' };
+      return {
+        ...base,
+        toolName: 'manage_spline',
+        arguments: payloadValue
+      };
+    }
     case 'Debug Tools': {
+
       if (!payloadValue) return { ...base, skipReason: 'No JSON payload provided' };
       if (!payloadValue.action) {
         payloadValue.action = 'debug_shape';

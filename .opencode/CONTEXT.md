@@ -56,10 +56,15 @@ Ultimate goal: **Full autonomous UE5 project creation by AI.**
 - **Verify connection**: Use `debug_extended` action: `check_connection`
 - **Port check**: `netstat -an | findstr 30010` should show LISTENING
 
+### Automated Test Reports
+- `npm run test:tools` executes the shared suite (currently 97 scenarios, all **passing** as of 2025-12-04 after the spline/actor/widget fixes)
+- Each run writes a JSON report under `tests/reports/` (filename `unreal-tool-test-results-<timestamp>.json`) for downstream agents to review
+- **Important**: `control_actor.spawn` now accepts an optional `replaceExisting: true` flag that auto-deletes an existing actor label before spawning. Use it for automation loops (e.g., Actor Tools #4) instead of manual cleanup.
+
 ### Common Testing Issues:
 - **"Unknown action"**: MCP not restarted after code changes
 - **UE_NOT_CONNECTED**: UE not running or Remote Control not enabled
-- **404 errors**: Wrong port (use 30010, not 30000)
+- **404 errors**: Wrong port (use 30010, not 30000) – MCP now defaults to 30010 after build, so seeing 30000 in logs means an override or stale env var
 - **Python errors**: UE5.7 API changes - check TODO.md for workarounds
 
 ## UE 5.7 Remote Control Ports
@@ -71,7 +76,7 @@ Ultimate goal: **Full autonomous UE5 project creation by AI.**
 | **30010** | **HTTP API** | Remote Control API - **MCP uses this** |
 | **30020** | WebSocket | Remote Control WebSocket - MCP connection status |
 
-**Critical**: Port 30000 is Conductor UI, NOT the API. MCP must use port **30010** for HTTP.
+**Critical**: Port 30000 is Conductor UI, NOT the API. MCP must use port **30010** for HTTP, and our env defaults now point here—override only if your UE project truly runs the API elsewhere.
 
 ## Required UE Project Settings
 
@@ -167,8 +172,8 @@ Enable in **Edit → Plugins**:
 ### Files Over 1000 Lines (Acceptable)
 | File | Lines | Reason OK |
 |------|-------|-----------|
-| `consolidated-tool-handlers.ts` | ~2200 | All 23 tools in one switch - splitting would require complex imports |
-| `consolidated-tool-definitions.ts` | ~1800 | All 23 tool schemas - splitting fragments the API surface |
+| `consolidated-tool-handlers.ts` | ~2200 | All 24 tools in one switch - splitting would require complex imports |
+| `consolidated-tool-definitions.ts` | ~1800 | All 24 tool schemas - splitting fragments the API surface |
 | `lighting.ts` | ~1400 | 14 coherent lighting methods |
 | `actors.ts` | ~1150 | 10 coherent actor methods |
 | `blueprint.ts` | ~1050 | 7 coherent blueprint methods |
@@ -183,7 +188,7 @@ See **TODO.md** for full roadmap (Phases 6-11).
 | 1-5 | Foundation, RC API, testing | ✅ Complete |
 | 6 | C++ Workflow (templates, GAS, CommonUI) | ✅ Complete & Tested 2025-12-02 |
 | 7 | Easy Wins (Materials, Rendering, Input, Collision, Sequence) | ✅ Complete 2025-12-02 |
-  | **8** | Medium Features (8 items, reordered easy→hard) | **In Progress** (4/8 complete - 8.1-8.4 implemented with Python templates) |
+  | **8** | Medium Features (8 items, reordered easy→hard) | **In Progress** (5/8 complete - 8.1-8.5 implemented, 8.2-8.4 still placeholder-backed) |
  | 9 | CommonUI Runtime → GAS Runtime | Pending |
  | 10 | Blueprint Graph Editing (needs C++ plugin) | Lower Priority |
  | 11 | Advanced/Research (World Partition, Skeletal, BT, PCG, etc.) | Future |
@@ -218,20 +223,23 @@ See **TODO.md** for full roadmap (Phases 6-11).
      - **Missing actions fixed**: `configure_replication`, `setup_input` - now properly handled with validation
      - **Python templates**: ✅ **Ready in python-templates.ts** - CREATE_GAMEMODE_FRAMEWORK, SET_DEFAULT_CLASSES
      - **Implementation roadmap**: Connect tool handlers to Python templates for real execution
-  4. ✅ **Actor Tags** (`manage_tags`) - **Fully Implemented** 2025-12-02
-     - Add/remove tags from actors
-     - Query actors by tag patterns with wildcards (`Enemy_*`, `*_Door`)
-     - Check if actors have specific tags
-     - Clear all tags from actors
-     - **Features**: AND/OR logic for tag queries, batch operations
-     - **Status**: **All 6 actions implemented** - returns placeholder responses
-     - **Missing actions fixed**: `get_all`, `clear` - now properly handled with elicitation
-     - **Python templates**: ✅ **Ready in python-templates.ts** - ADD_ACTOR_TAGS, REMOVE_ACTOR_TAGS, HAS_ACTOR_TAG, GET_ACTOR_TAGS, CLEAR_ACTOR_TAGS, QUERY_ACTORS_BY_TAG
-     - **Implementation roadmap**: Connect tool handlers to Python templates for real execution
-5. Splines (`manage_spline`)
-6. Component Management (`manage_component`)
-7. DataTables (`manage_datatable`)
-8. NavMesh Config (`manage_navigation`)
+ 4. ✅ **Actor Tags** (`manage_tags`) - **Fully Implemented** 2025-12-02
+      - Add/remove tags from actors
+      - Query actors by tag patterns with wildcards (`Enemy_*`, `*_Door`)
+      - Check if actors have specific tags
+      - Clear all tags from actors
+      - **Features**: AND/OR logic for tag queries, batch operations
+      - **Status**: **All 6 actions implemented** - returns placeholder responses
+      - **Missing actions fixed**: `get_all`, `clear` - now properly handled with elicitation
+      - **Python templates**: ✅ **Complete** in `python-templates.ts` - ADD_ACTOR_TAGS, REMOVE_ACTOR_TAGS, HAS_ACTOR_TAG, GET_ACTOR_TAGS, CLEAR_ACTOR_TAGS, QUERY_ACTORS_BY_TAG
+ 5. ✅ **Splines** (`manage_spline`) - **Fully Implemented** 2025-12-04
+      - Create spline actors, add/update/remove points, inspect data, and sample along the curve
+      - Uses Python fallback utilities to ensure a spline component exists even when the default actor lacks one
+      - Docs/tests updated (`docs/unreal-tool-test-cases.md`, `tests/run-unreal-tool-tests.mjs`) with 4 new scenarios (create/add/get/sample)
+ 6. Component Management (`manage_component`)
+ 7. DataTables (`manage_datatable`)
+ 8. NavMesh Config (`manage_navigation`)
+
 
 ## Key UE Systems to Support
 
@@ -278,7 +286,7 @@ When adding new functionality:
 3. Export constants and functions, not classes when possible
 4. Use existing patterns (e.g., `RESULT:` prefix for Python output parsing)
 
-## Tool Reference (23 Tools)
+## Tool Reference (24 Tools)
 
 | Tool | Purpose | Key Actions |
 |------|---------|-------------|
@@ -308,6 +316,7 @@ When adding new functionality:
  | **`manage_curves`** | Curve Assets (Phase 8.2) | create, add_key, evaluate, import, export | ✅ Implemented 2025-12-02 (placeholder) |
  | **`manage_gamemode`** | Game Framework (Phase 8.3) | create_framework, set_default_classes, configure_replication, setup_input | ✅ Implemented 2025-12-02 (placeholder) |
  | **`manage_tags`** | Actor Tags (Phase 8.4) | add, remove, has, get_all, clear, query | ✅ Implemented 2025-12-02 (placeholder) |
+ | **`manage_spline`** | Spline authoring (Phase 8.5) | create, add_point, set_point, remove_point, get_points, sample | ✅ Implemented 2025-12-04 |
 
 ## Coordinates & Units
 
@@ -389,7 +398,7 @@ Can't accomplish something with current tools? Add to `TODO.md`:
 ### Common Pitfalls
 - **Don't use Python for what RC API can do** - RC is faster and works without settings
 - **Always wrap Python output** with `RESULT:{json}` for reliable parsing
-- **Dangerous console commands** (`buildpaths`, `rebuildnavigation`) can crash UE - blocked at HTTP level
+- **Dangerous console commands** (`buildpaths`, `rebuildnavigation`) can crash UE - blocked at HTTP level; our safe-command filter allows standard UE Python snippets (even ones containing `system(`) but still blocks real OS calls like `import os`, `os.system`, etc.
 - **Multi-line Python** needs special handling - use `ExecutePythonCommandEx` with `ExecuteFile` mode
 
 ### Testing New Tools
@@ -485,6 +494,17 @@ asset = asset_tools.create_asset(
     factory=None  # Let UE figure it out
 )
 ```
+
+### Asset Creation Guardrails (2025-12-03)
+- Every "create" flow must check `EditorAssetLibrary.does_asset_exist` before touching disk.
+- If the asset already exists (e.g., `/Game/UI/Widgets/MCP_Widget`), tools return a success message describing the existing asset instead of prompting UE to overwrite.
+- To replace an asset, delete/rename it (or provide a new path) before re-running automation; automatic overwrites are disallowed.
+- When in doubt, run `manage_asset` `list`/`search` first so inputs reference a unique destination.
+
+### UI Tool Reliability (2025-12-04)
+- `system_control.create_widget` now sanitizes names (`My Widget` → `My_Widget`), auto-creates `/Game/UI/Widgets` if missing, and accepts an optional `savePath` override if you need another folder.
+- `system_control.show_widget` verifies the widget blueprint asset exists (and is actually a widget) before issuing console commands, returning a clear error when the asset is missing.
+- Both actions surface the resolved asset path (and any sanitization warnings) in their structured responses so dependent agents can react accordingly.
 
 **Sequencer API Changes in UE5.7:**
 - `MovieScene.add_master_track()` - REMOVED, use `MovieSceneSequenceExtensions.add_track(seq, TrackClass)`

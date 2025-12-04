@@ -41,8 +41,10 @@ import { CollisionTools } from './tools/collision.js';
 import { CurvesTools } from './tools/curves.js';
 import { GameModeTools } from './tools/gamemode.js';
 import { TagTools } from './tools/tags.js';
+import { SplineTools } from './tools/spline.js';
 import { consolidatedToolDefinitions } from './tools/consolidated-tool-definitions.js';
 import { handleConsolidatedToolCall } from './tools/consolidated-tool-handlers.js';
+
 import { prompts } from './prompts/index.js';
 import { 
   CallToolRequestSchema, 
@@ -263,6 +265,7 @@ export function createServer() {
   const curvesTools = new CurvesTools(bridge);
   const gameModeTools = new GameModeTools(bridge);
   const tagTools = new TagTools(bridge);
+  const splineTools = new SplineTools(bridge);
 
   const server = new Server(
     {
@@ -555,6 +558,7 @@ export function createServer() {
       curvesTools,
       gameModeTools,
       tagTools,
+      splineTools,
       // Elicitation (client-optional)
       elicit: elicitation.elicit,
       supportsElicitation: elicitation.supports,

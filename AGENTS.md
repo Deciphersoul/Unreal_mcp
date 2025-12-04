@@ -1,6 +1,7 @@
 # UE MCP Extended
 
-MCP server providing **23 tools** for Unreal Engine 5.7 development.
+MCP server providing **24 tools** for Unreal Engine 5.7 development.
+
 
 ## Purpose
 
@@ -53,20 +54,9 @@ If tools fail with 400 "cannot be accessed remotely":
 - This is **expected** in Limited Mode for Python-dependent features
 - Enable Full Mode settings above if you need those features
 
-## Configuration Structure
-
-**NEW (2025-12-03)**: Centralized AI tool configuration in `.ai-config/` directory for cross-tool compatibility.
-
-- **Shared context**: `.ai-config/context.md` (moved from `.opencode/CONTEXT.md`)
-- **Shared agents**: `.ai-config/agents/` (moved from `.opencode/agent/`)
-- **MCP config**: `.ai-config/mcp-config.json` (shared server settings)
-- **Tool configs**: `.ai-config/tools/` (OpenCode, Codex, etc.)
-
-See `.ai-config/README.md` for full documentation.
-
 ## Agents
 
-Agent definitions are now in `.ai-config/agents/` for use by all AI tools (OpenCode, Codex, etc.).
+See `.opencode/agent/` for agent definitions.
 
 | Agent | Purpose |
 |-------|---------|
@@ -86,7 +76,8 @@ See **TODO.md** for detailed Phase 6-11 roadmap.
 | 1-5 | Foundation (RC API, testing) | ✅ Complete |
 | 6 | C++ Workflow (GAS, CommonUI scaffolding) | ✅ Complete & Tested |
 | 7 | Easy Wins (Materials, Rendering, Input, Collision, Sequence) | ✅ Complete 2025-12-02 |
- | **8** | Medium Features (8 items, easy→hard) | **In Progress** (4/8 complete - 8.1-8.4 implemented with Python templates) |
+ | **8** | Medium Features (8 items, easy→hard) | **In Progress** (5/8 complete - 8.1-8.5 implemented, 8.2-8.4 still using placeholders) |
+
 | 9 | CommonUI → GAS Runtime | Pending |
 | 10 | Blueprint Graph Editing (C++ plugin) | Lower Priority |
 | 11 | Advanced (World Partition, Skeletal, BT, PCG, etc.) | Research |
@@ -115,18 +106,22 @@ See **TODO.md** for detailed Phase 6-11 roadmap.
    - **Status**: All 4 actions implemented with placeholder responses
    - **Python templates**: Ready in `python-templates.ts` (CREATE_GAMEMODE_FRAMEWORK, SET_DEFAULT_CLASSES)
    - **Missing templates**: CONFIGURE_REPLICATION, SETUP_INPUT
-4. ✅ **Actor Tags** (`manage_tags`) - **Implemented 2025-12-02**
-   - Add/remove tags from actors
-   - Query actors by tag patterns with wildcards (`Enemy_*`, `*_Door`)
-   - Check if actors have specific tags
-   - Clear all tags from actors
-   - **Features**: AND/OR logic for tag queries, batch operations
-   - **Status**: All 6 actions implemented with placeholder responses
-   - **Python templates**: ✅ **Complete** in `python-templates.ts` (ADD_ACTOR_TAGS, REMOVE_ACTOR_TAGS, HAS_ACTOR_TAG, GET_ACTOR_TAGS, CLEAR_ACTOR_TAGS, QUERY_ACTORS_BY_TAG)
-5. Splines (`manage_spline`)
-6. Component Management (`manage_component`)
-7. DataTables (`manage_datatable`)
-8. NavMesh Config (`manage_navigation`)
+ 4. ✅ **Actor Tags** (`manage_tags`) - **Implemented 2025-12-02**
+    - Add/remove tags from actors
+    - Query actors by tag patterns with wildcards (`Enemy_*`, `*_Door`)
+    - Check if actors have specific tags
+    - Clear all tags from actors
+    - **Features**: AND/OR logic for tag queries, batch operations
+    - **Status**: All 6 actions implemented with placeholder responses
+    - **Python templates**: ✅ **Complete** in `python-templates.ts` (ADD_ACTOR_TAGS, REMOVE_ACTOR_TAGS, HAS_ACTOR_TAG, GET_ACTOR_TAGS, CLEAR_ACTOR_TAGS, QUERY_ACTORS_BY_TAG)
+ 5. ✅ **Splines** (`manage_spline`) - **Implemented 2025-12-04**
+    - Create spline actors, add/update/remove points, inspect data, and sample along the curve
+    - Uses Python fallback with helper utilities to spawn spline actors even when default component is missing
+    - Fully wired into docs/tests (`docs/unreal-tool-test-cases.md`, `tests/run-unreal-tool-tests.mjs`)
+ 6. Component Management (`manage_component`)
+ 7. DataTables (`manage_datatable`)
+ 8. NavMesh Config (`manage_navigation`)
+
 
 ## Key UE Systems
 
@@ -311,7 +306,12 @@ The running MCP uses compiled code from `dist/`. Changes to `src/` don't take ef
 
 When matching user-provided names, always use `GetActorLabel()`, not path parsing.
 
+### Actor Naming Collisions
+- `control_actor.spawn` now checks for an existing actor label before spawning. If a requested `name`/`actorName` is already present, the tool returns `Actor '<name>' already exists. Choose a unique name or delete the existing actor first.`
+- Automation that intentionally reuses labels (e.g., running Actor Tools #1 twice) must delete the previous actor via `control_actor.delete` (Actor Tools #2) before respawning, otherwise the scenario will fail early with the friendly error above.
+
 ### UE5.7 Python API Breaking Changes
+
 
 **ARFilter** - Can't set `package_paths` on instances:
 ```python

@@ -143,18 +143,7 @@ Then enable Python execution in: Edit > Project Settings > Plugins > Remote Cont
 }
 ```
 
-### Cross-Tool Configuration (OpenCode, Codex, etc.)
-
-For projects using multiple AI tools (OpenCode, Codex, etc.), this repository now includes a **centralized configuration structure** in `.ai-config/`:
-
-- **`.ai-config/context.md`** - Shared project context and conventions
-- **`.ai-config/agents/`** - Reusable AI agent definitions (ue-assistant, ue-debugger, etc.)
-- **`.ai-config/mcp-config.json`** - MCP server settings (ports, paths)
-- **`.ai-config/tools/`** - Tool-specific configurations
-
-See [`.ai-config/README.md`](.ai-config/README.md) for details on cross-tool compatibility.
-
-## Available Tools (23)
+## Available Tools (24)
 
 | Tool | Description |
 |------|-------------|
@@ -181,6 +170,8 @@ See [`.ai-config/README.md`](.ai-config/README.md) for details on cross-tool com
 | `manage_rendering` | UE5 rendering control (Nanite, Lumen, VSM, ray tracing) |
 | `manage_input` | UE5 Enhanced Input System (InputActions, MappingContexts) |
 | `manage_collision` | Collision preset and channel configuration |
+| `manage_spline` | Create and edit spline actors, manipulate points, and sample along curves |
+
 
 ## Key Features
 
