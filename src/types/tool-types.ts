@@ -202,7 +202,9 @@ export interface ConsolidatedToolParams {
     location?: Vector3D;
     rotation?: Rotation3D;
     force?: Vector3D;
+    replaceExisting?: boolean;
   };
+
 
   control_editor: {
     action: EditorAction;
@@ -287,8 +289,10 @@ export interface ConsolidatedToolParams {
     is3D?: boolean;
     widgetName?: string;
     widgetType?: string;
+    savePath?: string;
     visible?: boolean;
     resolution?: string;
+
     projectPath?: string;
     editorExe?: string;
     filter_category?: string | string[];

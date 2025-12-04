@@ -2821,6 +2821,44 @@ case 'inspect':
             const res = await tools.componentTools.getComponents({ actorName });
             return cleanObject(res);
           }
+          case 'set_property': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide details for manage_component.set_property',
+              {
+                actorName: {
+                  type: 'string',
+                  title: 'Actor Name',
+                  description: 'Actor label to edit'
+                },
+                propertyName: {
+                  type: 'string',
+                  title: 'Property Name',
+                  description: 'Property on the actor or component to modify'
+                },
+                value: {
+                  type: 'string',
+                  description: 'New value for the property (will be converted to appropriate type)'
+                }
+              }
+            );
+            const actorName = requireNonEmptyString(args.actorName, 'actorName', 'Missing required parameter: actorName');
+            const propertyName = requireNonEmptyString(args.propertyName, 'propertyName', 'Missing required parameter: propertyName');
+            if (!Object.prototype.hasOwnProperty.call(args, 'value')) {
+              throw new Error('Missing required parameter: value');
+            }
+            const res = await tools.componentTools.setComponentProperty({
+              actorName,
+              componentName: args.componentName,
+              componentType: args.componentType,
+              propertyName,
+              propertyPath: typeof args.propertyPath === 'string' ? args.propertyPath : undefined,
+              value: args.value,
+              useEditorProperty: args.useEditorProperty !== false
+            });
+            return cleanObject(res);
+          }
           default:
             throw new Error(`Unknown manage_component action: ${args.action}`);
         }
@@ -2999,8 +3037,83 @@ case 'inspect':
           }
           default:
             throw new Error(`Unknown manage_spline action: ${args.action}`);
+      }
+
+      // 26. manage_ui - UI text modification with FText marshaling
+      case 'manage_ui': {
+        const action = requireAction(args);
+        const { UITools } = await import('../tools/ui.js');
+        const uiTools = new UITools(tools.bridge);
+        
+        switch (action) {
+           case 'set_actor_text': {
+             await elicitMissingPrimitiveArgs(
+               tools,
+               args,
+               'Provide details for manage_ui.set_actor_text',
+               {
+                 actorName: {
+                   type: 'string',
+                   title: 'Actor Name',
+                   description: 'Name of the actor (TextRenderActor or widget)'
+                 },
+                 text: {
+                   type: 'string',
+                   title: 'Text',
+                   description: 'Text content to set'
+                 }
+               }
+             );
+             const actorName = requireNonEmptyString(args.actorName, 'actorName', 'Missing required parameter: actorName');
+             const text = requireNonEmptyString(args.text, 'text', 'Missing required parameter: text');
+             log.debug(`[manage_ui.set_actor_text] Calling setActorText with actorName="${actorName}", text="${text}"`);
+             const res = await uiTools.setActorText({
+               actorName,
+               text,
+               componentName: args.componentName as string | undefined
+             });
+             log.debug(`[manage_ui.set_actor_text] Result:`, JSON.stringify(res));
+             return cleanObject(res);
+           }
+           case 'set_textrender_text': {
+             await elicitMissingPrimitiveArgs(
+               tools,
+               args,
+               'Provide details for manage_ui.set_textrender_text',
+               {
+                 actorName: {
+                   type: 'string',
+                   title: 'Actor Name',
+                   description: 'Name of the TextRenderActor'
+                 },
+                 text: {
+                   type: 'string',
+                   title: 'Text',
+                   description: 'Text content to set'
+                 }
+               }
+             );
+             const actorName = requireNonEmptyString(args.actorName, 'actorName', 'Missing required parameter: actorName');
+             const text = requireNonEmptyString(args.text, 'text', 'Missing required parameter: text');
+             log.debug(`[manage_ui.set_textrender_text] Calling with actorName="${actorName}", text="${text}", color=(${args.textColorR},${args.textColorG},${args.textColorB}), size=${args.fontSize}`);
+             const res = await uiTools.setTextRenderText({
+               actorName,
+               text,
+               textColorR: args.textColorR as number | undefined,
+               textColorG: args.textColorG as number | undefined,
+               textColorB: args.textColorB as number | undefined,
+               fontSize: args.fontSize as number | undefined,
+               horizontalAlignment: args.horizontalAlignment as number | undefined,
+               verticalAlignment: args.verticalAlignment as number | undefined
+             });
+             log.debug(`[manage_ui.set_textrender_text] Result:`, JSON.stringify(res));
+             return cleanObject(res);
+           }
+          default:
+            throw new Error(`Unknown action for manage_ui: ${action}`);
         }
- 
+      }
+
       default:
         throw new Error(`Unknown consolidated tool: ${name}`);
 

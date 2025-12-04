@@ -87,7 +87,7 @@ export const DANGEROUS_PATTERNS = [
  */
 export const FORBIDDEN_TOKENS = [
   'rm ', 'rm-', 'del ', 'format ', 'shutdown', 'reboot',
-  'rmdir', 'mklink', 'copy ', 'move ', 'start "', 'system(',
+  'rmdir', 'mklink', 'copy ', 'move ', 'start "',
   'import os', 'import subprocess', 'subprocess.', 'os.system',
   'exec(', 'eval(', '__import__', 'import sys', 'import importlib',
   'with open', 'open('

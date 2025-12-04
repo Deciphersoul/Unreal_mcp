@@ -6,6 +6,7 @@ import { Logger } from '../utils/logger.js';
 
 const log = new Logger('ActorTools');
 
+
 /** Shape name to engine asset path mapping */
 const SHAPE_MAPPING: Record<string, string> = {
   cube: '/Engine/BasicShapes/Cube',
@@ -140,11 +141,132 @@ export class ActorTools {
     return { method: 'class', resolvedPath: `/Script/Engine.${classPath}` };
   }
 
+  private normalizeActorPath(actorPath: unknown): string | null {
+    if (!actorPath || typeof actorPath !== 'string') {
+      return null;
+    }
+    const trimmed = actorPath.trim();
+    if (!trimmed || trimmed === 'None') {
+      return null;
+    }
+    return trimmed;
+  }
+
+  private async findActorPath(actorName: string): Promise<string | null> {
+    const trimmedName = actorName.trim();
+    if (!trimmedName) {
+      return null;
+    }
+    const subsystemPath = '/Script/UnrealEd.Default__EditorActorSubsystem';
+
+    const tryFindByLabel = async (exactMatch: boolean): Promise<string | null> => {
+      const response = await this.bridge.call({
+        objectPath: subsystemPath,
+        functionName: 'FindActorByLabel',
+        parameters: {
+          ActorLabel: trimmedName,
+          ExactMatch: exactMatch
+        }
+      });
+      return this.normalizeActorPath(response?.ReturnValue);
+    };
+
+    try {
+      const exact = await tryFindByLabel(true);
+      if (exact) {
+        return exact;
+      }
+      const fuzzy = await tryFindByLabel(false);
+      if (fuzzy) {
+        return fuzzy;
+      }
+    } catch (error) {
+      log.debug(`FindActorByLabel lookup failed for ${trimmedName}: ${error}`);
+    }
+
+    try {
+      const pythonPath = await this.findActorPathViaPython(trimmedName);
+      if (pythonPath) {
+        return pythonPath;
+      }
+    } catch (pythonError) {
+      log.debug(`Python actor lookup failed for ${trimmedName}: ${pythonError}`);
+    }
+
+    return null;
+  }
+
+  private async findActorPathViaPython(actorName: string): Promise<string | null> {
+    if (!actorName) {
+      return null;
+    }
+    const escapedName = escapePythonString(actorName);
+    const pythonCmd = `
+import unreal
+import json
+
+result = {
+    "success": False,
+    "path": "",
+    "label": "",
+    "message": "",
+    "error": ""
+}
+
+target_label = "${escapedName}".strip()
+if not target_label:
+    result["error"] = "Actor name is empty"
+else:
+    try:
+        subsystem = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
+        if subsystem:
+            lower_target = target_label.lower()
+            actors = subsystem.get_all_level_actors()
+            for actor in actors:
+                if not actor:
+                    continue
+                try:
+                    label = (actor.get_actor_label() or "").strip()
+                    name = actor.get_name() or ""
+                    label_lower = label.lower()
+                    name_lower = name.lower()
+                    if label_lower == lower_target or name_lower == lower_target or label_lower.startswith(lower_target + "_"):
+                        result["success"] = True
+                        result["path"] = actor.get_path_name()
+                        result["label"] = label or name
+                        result["message"] = f"Actor '{result['label']}' matched via Python search"
+                        break
+                except Exception:
+                    continue
+            if not result["success"]:
+                result["error"] = f"Actor not found: {target_label}"
+        else:
+            result["error"] = "EditorActorSubsystem not available"
+    except Exception as search_error:
+        result["error"] = str(search_error)
+
+print('RESULT:' + json.dumps(result))
+`.trim();
+
+    const response = await this.bridge.executePython(pythonCmd);
+    const interpreted = interpretStandardResult(response, {
+      successMessage: `Actor path resolved for ${actorName}`,
+      failureMessage: `Actor not found: ${actorName}`
+    });
+
+    if (interpreted.success) {
+      return coerceString(interpreted.payload.path) ?? null;
+    }
+
+    return null;
+  }
+
   /**
    * Spawn actor using Direct Remote Control API
    * Tries SpawnActorFromObject for meshes, SpawnActorFromClass for classes
    */
   private async spawnViaDirectRC(params: {
+
     classPath: string;
     location: { x: number; y: number; z: number };
     rotation: { pitch: number; yaw: number; roll: number };
@@ -252,53 +374,7 @@ export class ActorTools {
     log.debug(`Attempting Direct RC delete for actor: ${actorName}`);
     
     try {
-      // First, we need to find the actor by name/label
-      // Use GetAllLevelActors and filter
-      const getAllResult = await this.bridge.call({
-        objectPath: '/Script/UnrealEd.Default__EditorActorSubsystem',
-        functionName: 'GetAllLevelActors',
-        parameters: {}
-      });
-      
-      const actors = getAllResult?.ReturnValue || [];
-      if (!Array.isArray(actors) || actors.length === 0) {
-        throw new Error('No actors found in level');
-      }
-      
-      // Find the actor with matching label (case-insensitive)
-      const lowerActorName = actorName.toLowerCase();
-      let targetActorPath: string | null = null;
-      
-      for (const actorPath of actors) {
-        if (!actorPath || typeof actorPath !== 'string') continue;
-        
-        try {
-          // Get the actor label
-          const labelResult = await this.bridge.call({
-            objectPath: actorPath,
-            functionName: 'GetActorLabel',
-            parameters: {}
-          });
-          
-          const label = labelResult?.ReturnValue || '';
-          if (label.toLowerCase() === lowerActorName || 
-              label.toLowerCase().startsWith(lowerActorName + '_')) {
-            targetActorPath = actorPath;
-            break;
-          }
-          
-          // Also check the object name (last part of path)
-          const objName = actorPath.split('.').pop() || actorPath.split(':').pop() || '';
-          if (objName.toLowerCase() === lowerActorName) {
-            targetActorPath = actorPath;
-            break;
-          }
-        } catch {
-          // Skip actors we can't query
-          continue;
-        }
-      }
-      
+      const targetActorPath = await this.findActorPath(actorName);
       if (!targetActorPath) {
         throw new Error(`Actor not found: ${actorName}`);
       }
@@ -382,26 +458,30 @@ try:
         found = False
         actor_name = "${escapedName}"
         actor_name_lower = actor_name.lower()
-        
+
         for actor in actors:
             if not actor:
                 continue
             try:
-                label = actor.get_actor_label()
-                name = actor.get_name()
-                if label.lower() == actor_name_lower or name.lower() == actor_name_lower or label.lower().startswith(actor_name_lower + "_"):
+                label = (actor.get_actor_label() or "").strip()
+                name = (actor.get_name() or "").strip()
+                label_lower = label.lower()
+                name_lower = name.lower()
+                if label_lower == actor_name_lower or name_lower == actor_name_lower or label_lower.startswith(actor_name_lower + "_"):
                     success = subsys.destroy_actor(actor)
                     result["success"] = success
-                    result["deleted"] = label or name
+                    result["deleted"] = label or name or actor_name
                     found = True
                     break
             except Exception:
                 continue
-        
+
         if not found:
             result["error"] = f"Actor not found: {actor_name}"
     else:
         result["error"] = "EditorActorSubsystem not available"
+
+
 except Exception as e:
     result["error"] = str(e)
 
@@ -425,7 +505,7 @@ print('RESULT:' + json.dumps(result))
     };
   }
 
-  async spawn(params: { classPath: string; location?: { x: number; y: number; z: number }; rotation?: { pitch: number; yaw: number; roll: number }; actorName?: string }): Promise<SpawnResult> {
+  async spawn(params: { classPath: string; location?: { x: number; y: number; z: number }; rotation?: { pitch: number; yaw: number; roll: number }; actorName?: string; replaceExisting?: boolean }): Promise<SpawnResult> {
     if (!params.classPath || typeof params.classPath !== 'string' || params.classPath.trim().length === 0) {
       throw new Error(`Invalid classPath: ${params.classPath}`);
     }
@@ -436,9 +516,21 @@ print('RESULT:' + json.dumps(result))
       throw new Error(`Invalid actorName: ${params.actorName}`);
     }
     const sanitizedActorName = requestedActorName?.replace(/[^A-Za-z0-9_-]/g, '_');
-    const lowerName = className.toLowerCase();
+    const replaceExisting = params.replaceExisting === true;
+
+    if (sanitizedActorName) {
+      const existing = await this.findActorPath(sanitizedActorName);
+      if (existing) {
+        if (!replaceExisting) {
+          throw new Error(`Actor '${sanitizedActorName}' already exists. Choose a unique name or delete the existing actor first.`);
+        }
+        await this.delete(sanitizedActorName);
+      }
+    }
 
     // Prepare location and rotation with defaults
+
+
     const [locX, locY, locZ] = ensureVector3(
       params.location ?? { x: 0, y: 0, z: 100 },
       'actor location'

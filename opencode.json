@@ -1,6 +1,5 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "_comment": "MCP server and agent configs reference shared .ai-config/ directory for cross-tool compatibility",
   "mcp": {
     "ue-mcp": {
       "type": "local",
@@ -20,7 +19,7 @@
     "ue-assistant": {
       "description": "Primary UE assistant - delegates to specialists",
       "mode": "primary",
-      "prompt": "{file:./.ai-config/agents/ue-assistant.md}",
+      "prompt": "{file:./.opencode/agent/ue-assistant.md}",
       "tools": {
         "ue-mcp_*": true
       }

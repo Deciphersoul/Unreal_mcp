@@ -452,11 +452,16 @@ except Exception as e:
     const py = `
 import unreal, json
 try:
-    unreal.LevelSequenceEditorBlueprintLibrary.pause()
-    print('RESULT:' + json.dumps({'success': True, 'paused': True}))
+    seq = unreal.LevelSequenceEditorBlueprintLibrary.get_focused_level_sequence()
+    if not seq:
+        print('RESULT:' + json.dumps({'success': False, 'error': 'No sequence is currently focused'}))
+    else:
+        unreal.LevelSequenceEditorBlueprintLibrary.pause()
+        print('RESULT:' + json.dumps({'success': True, 'paused': True}))
 except Exception as e:
     print('RESULT:' + json.dumps({'success': False, 'error': str(e)}))
 `.trim();
+
 
     const resp = await this.executeWithRetry(
       () => this.bridge.executePython(py),

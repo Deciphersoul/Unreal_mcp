@@ -2114,7 +2114,7 @@ Supported actions: add, remove, get.`,
       properties: {
         action: {
           type: 'string',
-          enum: ['add', 'remove', 'get'],
+          enum: ['add', 'remove', 'get', 'set_property'],
           description: 'Component action to perform'
         },
         actorName: { type: 'string', description: 'Actor label/name to operate on.' },
@@ -2160,6 +2160,21 @@ Supported actions: add, remove, get.`,
         replaceExisting: {
           type: 'boolean',
           description: 'If true, destroy any component with the same name before adding a new one.'
+        },
+        propertyName: {
+          type: 'string',
+          description: 'Property name to modify on the actor or component. Required for set_property action.'
+        },
+        propertyPath: {
+          type: 'string',
+          description: 'Optional nested property path to modify (advanced use).'
+        },
+        value: {
+          description: 'New value to assign when using set_property. Supports numbers, booleans, strings, and simple structs (Vector, Rotator, Color).'
+        },
+        useEditorProperty: {
+          type: 'boolean',
+          description: 'If true (default), uses set_editor_property when available before falling back to setattr when setting component properties.'
         }
       },
       required: ['action']
@@ -2173,6 +2188,8 @@ Supported actions: add, remove, get.`,
         componentName: { type: 'string', description: 'Component name affected' },
         componentClass: { type: 'string', description: 'Component class affected' },
         attachedTo: { type: 'string', description: 'Parent component name for new scene components' },
+        propertyName: { type: 'string', description: 'Property modified for set_property action' },
+        newValue: { description: 'Echo of the value that was written when using set_property' },
         components: {
           type: 'array',
           description: 'Full component listing for get action.',
@@ -2448,6 +2465,65 @@ Supported actions: create, add_point, set_point, remove_point, get_points, sampl
         sampleMode: { type: 'string', description: 'Indicates whether sampling used distance or inputKey' },
         error: { type: 'string', description: 'Error message if failed' }
       }
+    }
+  },
+  {
+    name: 'manage_ui',
+    description: `UI text modification tool with FText marshaling support.
+
+Use it when you need to:
+- set text on TextRenderActors with proper FText formatting
+- modify widget text properties
+- update text styling (color, size, alignment)
+- handle text for narrative/story authoring
+
+Supported actions: set_text, set_textrender_text.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action: {
+          type: 'string',
+          enum: ['set_actor_text', 'set_textrender_text'],
+          description: 'UI text action to perform'
+        },
+        actorName: {
+          type: 'string',
+          description: 'Name/label of the actor to modify (TextRenderActor or widget)'
+        },
+        text: {
+          type: 'string',
+          description: 'Text content to set (supports Unicode)'
+        },
+        componentName: {
+          type: 'string',
+          description: 'Component name for set_text action (optional, e.g., "TextRenderComponent")'
+        },
+        textColorR: {
+          type: 'number',
+          description: 'Red channel for text color (0.0-1.0). Required for set_textrender_text if setting color.'
+        },
+        textColorG: {
+          type: 'number',
+          description: 'Green channel for text color (0.0-1.0). Required for set_textrender_text if setting color.'
+        },
+        textColorB: {
+          type: 'number',
+          description: 'Blue channel for text color (0.0-1.0). Required for set_textrender_text if setting color.'
+        },
+        fontSize: {
+          type: 'number',
+          description: 'Font size/world size for TextRenderActor. Optional for set_textrender_text.'
+        },
+        horizontalAlignment: {
+          type: 'number',
+          description: 'Horizontal alignment (0=Left, 1=Center, 2=Right). Optional for set_textrender_text.'
+        },
+        verticalAlignment: {
+          type: 'number',
+          description: 'Vertical alignment (0=Top, 1=Center, 2=Bottom). Optional for set_textrender_text.'
+        }
+      },
+      required: ['action', 'actorName', 'text']
     }
   }
 ];

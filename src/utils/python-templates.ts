@@ -648,63 +648,213 @@ except Exception as e:
      `.trim()
    },
 
-   QUERY_ACTORS_BY_TAG: {
-     name: 'query_actors_by_tag',
-     script: `
+    QUERY_ACTORS_BY_TAG: {
+      name: 'query_actors_by_tag',
+      script: `
 import unreal
 import json
 import fnmatch
 
 try:
-    tag_pattern = '{tag_pattern}'
-    match_all = {match_all}
-    
-    # Get actor subsystem
-    subsys = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
-    if not subsys:
-        print(f"RESULT:{json.dumps({'success': False, 'error': 'EditorActorSubsystem not available'})}")
-        exit(0)
-    
-    # Get all actors
-    all_actors = subsys.get_all_level_actors()
-    
-    # Filter actors by tag pattern
-    matching_actors = []
-    matching_tags = set()
-    
-    for actor in all_actors:
-        actor_tags = list(actor.tags)
-        actor_name = actor.get_actor_label()
-        
-        if match_all:
-            # Match all tags (AND logic)
-            all_match = True
-            for tag in actor_tags:
-                if not fnmatch.fnmatch(tag, tag_pattern):
-                    all_match = False
-                    break
-            if all_match and actor_tags:
-                matching_actors.append(actor_name)
-                matching_tags.update(actor_tags)
-        else:
-            # Match any tag (OR logic)
-            for tag in actor_tags:
-                if fnmatch.fnmatch(tag, tag_pattern):
-                    matching_actors.append(actor_name)
-                    matching_tags.add(tag)
-                    break
-    
-    print(f"RESULT:{json.dumps({
-        'success': True,
-        'actors': matching_actors,
-        'count': len(matching_actors),
-        'matchingTags': list(matching_tags),
-        'message': f'Found {len(matching_actors)} actor(s) matching tag pattern "{tag_pattern}"'
-    })}")
+     tag_pattern = '{tag_pattern}'
+     match_all = {match_all}
+     
+     # Get actor subsystem
+     subsys = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
+     if not subsys:
+         print(f"RESULT:{json.dumps({'success': False, 'error': 'EditorActorSubsystem not available'})}")
+         exit(0)
+     
+     # Get all actors
+     all_actors = subsys.get_all_level_actors()
+     
+     # Filter actors by tag pattern
+     matching_actors = []
+     matching_tags = set()
+     
+     for actor in all_actors:
+         actor_tags = list(actor.tags)
+         actor_name = actor.get_actor_label()
+         
+         if match_all:
+             # Match all tags (AND logic)
+             all_match = True
+             for tag in actor_tags:
+                 if not fnmatch.fnmatch(tag, tag_pattern):
+                     all_match = False
+                     break
+             if all_match and actor_tags:
+                 matching_actors.append(actor_name)
+                 matching_tags.update(actor_tags)
+         else:
+             # Match any tag (OR logic)
+             for tag in actor_tags:
+                 if fnmatch.fnmatch(tag, tag_pattern):
+                     matching_actors.append(actor_name)
+                     matching_tags.add(tag)
+                     break
+     
+     print(f"RESULT:{json.dumps({
+         'success': True,
+         'actors': matching_actors,
+         'count': len(matching_actors),
+         'matchingTags': list(matching_tags),
+         'message': f'Found {len(matching_actors)} actor(s) matching tag pattern "{tag_pattern}"'
+     })}")
 except Exception as e:
-    print(f"RESULT:{json.dumps({'success': False, 'error': str(e)})}")
-     `.trim()
-   }
+     print(f"RESULT:{json.dumps({'success': False, 'error': str(e)})}")
+      `.trim()
+    },
+
+    // Phase 8.9: UI Text Modification
+    SET_WIDGET_TEXT: {
+      name: 'set_widget_text',
+      script: `
+import unreal
+import json
+
+try:
+     actor_name = '{actor_name}'
+     text_value = '{text_value}'
+     component_name = '{component_name}'
+     
+     # Get actor subsystem
+     subsys = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
+     if not subsys:
+         print(f"RESULT:{json.dumps({'success': False, 'error': 'EditorActorSubsystem not available'})}")
+         exit(0)
+     
+     # Find actor by name
+     actors = subsys.get_all_level_actors()
+     target_actor = None
+     for actor in actors:
+         if actor.get_actor_label().lower() == actor_name.lower():
+             target_actor = actor
+             break
+     
+     if not target_actor:
+         print(f"RESULT:{json.dumps({'success': False, 'error': f'Actor "{actor_name}" not found'})}")
+         exit(0)
+     
+     # Create FText from string
+     ftext = unreal.FText(text_value)
+     
+     # Try to set text on TextRenderComponent if it exists
+     if component_name:
+         component = target_actor.get_component_by_class(unreal.TextRenderComponent)
+         if component:
+             component.set_editor_property('text', ftext)
+             print(f"RESULT:{json.dumps({
+                 'success': True,
+                 'actor': actor_name,
+                 'component': 'TextRenderComponent',
+                 'newText': text_value,
+                 'message': f'Text updated on "{actor_name}"'
+             })}")
+             exit(0)
+     
+     # Try direct property assignment
+     try:
+         target_actor.set_editor_property('text', ftext)
+         print(f"RESULT:{json.dumps({
+             'success': True,
+             'actor': actor_name,
+             'newText': text_value,
+             'message': f'Text updated on "{actor_name}"'
+         })}")
+     except:
+         # Fallback: try through TextRenderComponent
+         text_component = target_actor.get_component_by_class(unreal.TextRenderComponent)
+         if text_component:
+             text_component.set_editor_property('text', ftext)
+             print(f"RESULT:{json.dumps({
+                 'success': True,
+                 'actor': actor_name,
+                 'component': 'TextRenderComponent',
+                 'newText': text_value,
+                 'message': f'Text updated on "{actor_name}" via TextRenderComponent'
+             })}")
+         else:
+             print(f"RESULT:{json.dumps({'success': False, 'error': f'Could not find text property on "{actor_name}"'})}")
+     
+except Exception as e:
+     print(f"RESULT:{json.dumps({'success': False, 'error': str(e)})}")
+      `.trim()
+    },
+
+    SET_TEXTRENDER_TEXT: {
+      name: 'set_textrender_text',
+      script: `
+import unreal
+import json
+
+try:
+     actor_name = '{actor_name}'
+     text_value = '{text_value}'
+     text_color_r = {text_color_r}
+     text_color_g = {text_color_g}
+     text_color_b = {text_color_b}
+     text_size = {text_size}
+     horizontal_alignment = {horizontal_alignment}
+     vertical_alignment = {vertical_alignment}
+     
+     # Get actor subsystem
+     subsys = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
+     if not subsys:
+         print(f"RESULT:{json.dumps({'success': False, 'error': 'EditorActorSubsystem not available'})}")
+         exit(0)
+     
+     # Find TextRenderActor by name
+     actors = subsys.get_all_level_actors()
+     target_actor = None
+     for actor in actors:
+         if actor.get_actor_label().lower() == actor_name.lower():
+             target_actor = actor
+             break
+     
+     if not target_actor:
+         print(f"RESULT:{json.dumps({'success': False, 'error': f'TextRenderActor "{actor_name}" not found'})}")
+         exit(0)
+     
+     # Create FText from string
+     ftext = unreal.FText(text_value)
+     
+     # Get TextRenderComponent
+     text_component = target_actor.get_component_by_class(unreal.TextRenderComponent)
+     if not text_component:
+         print(f"RESULT:{json.dumps({'success': False, 'error': f'TextRenderComponent not found on "{actor_name}"'})}")
+         exit(0)
+     
+     # Set text
+     text_component.set_editor_property('text', ftext)
+     
+     # Set color
+     if text_color_r or text_color_g or text_color_b:
+         text_color = unreal.LinearColor(text_color_r, text_color_g, text_color_b, 1.0)
+         text_component.set_editor_property('text_render_color', text_color)
+     
+     # Set text size
+     if text_size > 0:
+         text_component.set_editor_property('world_size', text_size)
+     
+     # Set alignment
+     if horizontal_alignment >= 0:
+         text_component.set_editor_property('horizontal_alignment', horizontal_alignment)
+     if vertical_alignment >= 0:
+         text_component.set_editor_property('vertical_alignment', vertical_alignment)
+     
+     print(f"RESULT:{json.dumps({
+         'success': True,
+         'actor': actor_name,
+         'text': text_value,
+         'color': [text_color_r, text_color_g, text_color_b],
+         'size': text_size,
+         'message': f'TextRenderActor "{actor_name}" updated successfully'
+     })}")
+except Exception as e:
+     print(f"RESULT:{json.dumps({'success': False, 'error': str(e)})}")
+      `.trim()
+    }
 };
 
 /**

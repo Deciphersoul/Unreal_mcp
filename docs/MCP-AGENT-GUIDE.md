@@ -4,6 +4,8 @@ Complete reference for AI agents using the Unreal Engine MCP tools.
 
 ## Quick Start
 
+> **Important Notes (Dec 2025):** `query_level` still returns counts without actor payloads. Use `manage_component.set_property` to edit actor/component values (e.g., TextRenderActor `propertyName: Text`). Always verify actor labels in the editor before running mutating commands.
+
 ### 1. Always Start With Connection Check
 ```
 debug_extended action:check_connection
@@ -170,7 +172,7 @@ manage_sequence action:play loopMode:loop
 ---
 
 ### 5. query_level
-Scene understanding and actor discovery.
+Scene understanding and actor discovery. **Current limitation (Dec 2025):** responses often report `success` but omit actor payloads. Use this tool for counts only and confirm actual actor labels in the editor before issuing mutating commands.
 
 | Action | Required Params | Optional Params | Description |
 |--------|----------------|-----------------|-------------|

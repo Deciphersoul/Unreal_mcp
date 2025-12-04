@@ -1,6 +1,0 @@
-# Ignore OpenCode-specific temporary files
-tools/*.lock
-tools/node_modules/
-
-# But track the config files
-!tools/*.json

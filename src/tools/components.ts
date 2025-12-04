@@ -27,6 +27,16 @@ export interface GetComponentsParams {
   actorName: string;
 }
 
+export interface SetComponentPropertyParams {
+  actorName: string;
+  componentName?: string;
+  componentType?: string;
+  propertyName: string;
+  propertyPath?: string;
+  value: any;
+  useEditorProperty?: boolean;
+}
+
 interface VectorStruct { x: number; y: number; z: number; }
 interface RotationStruct { pitch: number; yaw: number; roll: number; }
 
@@ -219,6 +229,75 @@ else:
     return this.executeCommand(payload, pythonBody, {
       successMessage: 'Components listed',
       failureMessage: 'Failed to get components'
+    });
+  }
+
+  async setComponentProperty(params: SetComponentPropertyParams) {
+    const payload = {
+      actorName: params.actorName,
+      componentName: typeof params.componentName === 'string' ? params.componentName : undefined,
+      componentType: typeof params.componentType === 'string' ? params.componentType : undefined,
+      propertyName: params.propertyName,
+      propertyPath: typeof params.propertyPath === 'string' ? params.propertyPath : undefined,
+      value: params.value,
+      useEditorProperty: params.useEditorProperty !== false
+    };
+
+    const pythonBody = `
+actor_label = payload.get('actorName')
+prop_name = payload.get('propertyName')
+if not actor_label or not prop_name:
+    result['error'] = 'Missing actor name or property name'
+else:
+    actor = find_actor(actor_label)
+    if not actor:
+        result['error'] = f"Actor '{actor_label}' not found"
+    else:
+        target = actor
+        target_component_name = ''
+        if payload.get('componentName') or payload.get('componentType'):
+            target = None
+            desired_name = sanitize_component_name(payload.get('componentName'))
+            if desired_name:
+                target = find_component_by_name(actor, desired_name)
+            if not target and payload.get('componentType'):
+                comp_class = resolve_component_class(payload.get('componentType'))
+                if comp_class:
+                    target = find_component_by_class(actor, comp_class)
+            if not target:
+                result['error'] = 'Component not found on actor'
+            else:
+                target_component_name = str(target.get_name())
+        if target:
+            success, new_value, warnings = set_property_value(
+                target,
+                prop_name,
+                payload.get('value'),
+                payload.get('propertyPath'),
+                payload.get('useEditorProperty', True)
+            )
+            if warnings:
+                result.setdefault('warnings', []).extend(warnings)
+            if success:
+                result['success'] = True
+                result['actorName'] = actor_label
+                if target is not actor:
+                    result['componentName'] = target_component_name
+                    try:
+                        result['componentClass'] = str(target.get_class().get_name())
+                    except Exception:
+                        pass
+                result['propertyName'] = prop_name
+                result['newValue'] = new_value
+                target_label = 'component' if target is not actor else 'actor'
+                result['message'] = f"Property '{prop_name}' updated on {target_label} '{target_component_name or actor_label}'"
+            else:
+                result['error'] = new_value or f"Failed to update property '{prop_name}'"
+`;
+
+    return this.executeCommand(payload, pythonBody, {
+      successMessage: 'Property updated',
+      failureMessage: 'Failed to set component property'
     });
   }
 
@@ -458,6 +537,110 @@ def apply_mobility(component, mobility):
                 component.set_editor_property('mobility', mob_enum)
             except Exception:
                 result.setdefault('warnings', []).append('Failed to set component mobility')
+
+def coerce_property_value(value):
+    if isinstance(value, dict):
+        lowered = {str(k).lower(): v for k, v in value.items()}
+        if {'x', 'y', 'z'}.issubset(lowered.keys()):
+            try:
+                return unreal.Vector(float(lowered.get('x', 0.0)), float(lowered.get('y', 0.0)), float(lowered.get('z', 0.0)))
+            except Exception:
+                pass
+        if {'pitch', 'yaw', 'roll'}.issubset(lowered.keys()):
+            try:
+                return unreal.Rotator(float(lowered.get('pitch', 0.0)), float(lowered.get('yaw', 0.0)), float(lowered.get('roll', 0.0)))
+            except Exception:
+                pass
+        if {'r', 'g', 'b'}.issubset(lowered.keys()):
+            try:
+                return unreal.LinearColor(float(lowered.get('r', 0.0)), float(lowered.get('g', 0.0)), float(lowered.get('b', 0.0)), float(lowered.get('a', 1.0)))
+            except Exception:
+                pass
+        if 'text' in lowered:
+            try:
+                return unreal.Text.from_string(str(lowered.get('text')))
+            except Exception:
+                return str(lowered.get('text'))
+    if isinstance(value, str):
+        return value
+    return value
+
+def json_safe_value(value):
+    try:
+        if isinstance(value, unreal.Vector):
+            return {'x': float(value.x), 'y': float(value.y), 'z': float(value.z)}
+        if isinstance(value, unreal.Rotator):
+            return {'pitch': float(value.pitch), 'yaw': float(value.yaw), 'roll': float(value.roll)}
+        if isinstance(value, unreal.LinearColor):
+            return {'r': float(value.r), 'g': float(value.g), 'b': float(value.b), 'a': float(value.a)}
+        if isinstance(value, unreal.Color):
+            return {'r': int(value.r), 'g': int(value.g), 'b': int(value.b), 'a': int(value.a)}
+        if hasattr(unreal, 'Text') and isinstance(value, unreal.Text):
+            try:
+                return value.to_string()
+            except Exception:
+                return str(value)
+    except Exception:
+        return str(value)
+    if isinstance(value, (int, float, bool)) or value is None:
+        return value
+    if isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, (list, tuple)):
+        return list(value)
+    return str(value)
+
+def set_property_value(target, prop_name, raw_value, property_path=None, use_editor_property=True):
+    warnings = []
+    if not target or not prop_name:
+        return False, 'Missing target or property name', warnings
+    converted = coerce_property_value(raw_value)
+    prop_lower = str(prop_name).lower()
+
+    if prop_lower == 'text' and hasattr(target, 'set_text'):
+        try:
+            if not isinstance(converted, unreal.Text):
+                converted = unreal.Text.from_string(str(converted))
+            target.set_text(converted)
+            return True, json_safe_value(converted), warnings
+        except Exception as text_error:
+            warnings.append(f'set_text failed: {text_error}')
+
+    if property_path and isinstance(property_path, str):
+        try:
+            segments = [seg for seg in property_path.split('.') if seg]
+            inner = target
+            for seg in segments[:-1]:
+                inner = getattr(inner, seg, None)
+                if inner is None:
+                    break
+            if inner is not None:
+                setattr(inner, segments[-1], converted)
+                try:
+                    return True, json_safe_value(getattr(inner, segments[-1])), warnings
+                except Exception:
+                    return True, json_safe_value(converted), warnings
+        except Exception as path_error:
+            warnings.append(f'propertyPath failed: {path_error}')
+
+    if use_editor_property and hasattr(target, 'set_editor_property'):
+        try:
+            target.set_editor_property(prop_name, converted)
+            try:
+                new_val = target.get_editor_property(prop_name)
+            except Exception:
+                new_val = getattr(target, prop_name, converted)
+            return True, json_safe_value(new_val), warnings
+        except Exception as editor_error:
+            warnings.append(f'set_editor_property failed: {editor_error}')
+
+    try:
+        setattr(target, prop_name, converted)
+        return True, json_safe_value(getattr(target, prop_name, converted)), warnings
+    except Exception as attr_error:
+        return False, f'Unable to set property: {attr_error}', warnings
 
 ${body.trim()}
 

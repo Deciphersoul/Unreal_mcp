@@ -195,59 +195,70 @@ See **TODO.md** for full roadmap (Phases 6-11).
  | 10 | Blueprint Graph Editing (needs C++ plugin) | Lower Priority |
  | 11 | Advanced/Research (World Partition, Skeletal, BT, PCG, etc.) | Future |
 
-### Phase 8 Order (Easy → Hard)
-1. ✅ **Asset Search** (`manage_asset` add `search`) - Fixed 2025-12-02
+### Phase 8 Order (Easy → Hard) - Testing Update 2025-12-04
+
+1. ✅ **Asset Search** (`manage_asset` add `search`) - ✅ TESTED 2025-12-04
    - Search by name pattern (wildcards: `*cube*`, `material_*`)
    - Filter by asset type (`StaticMesh`, `Material`, `Texture2D`, etc.)
    - Recursive directory search with pagination
    - Returns metadata: total count, hasMore, pagination info
-   - **FIXED**: UE5.7 `Name` object → string conversion bug + boolean conversion
-   - **Issue**: `asset.asset_name` returns `Name` object, not string - needs `str()` conversion
-   - **Fix**: Added `str()` conversions for all `Name` object properties
-   - **Also Fixed**: JavaScript boolean `true`/`false` → Python `True`/`False` conversion
-   - **Status**: Fixed, requires MCP restart after TypeScript rebuild
-  2. ✅ **Curves** (`manage_curves`) - **Fully Implemented** 2025-12-02
-     - Create curve assets (FloatCurve, VectorCurve, TransformCurve)
-     - Add keyframes with interpolation settings
-     - Evaluate curves at specific times
-     - Import/export curve data (CSV/JSON)
-     - **Status**: **All 5 actions implemented** - returns placeholder responses
-     - **Missing actions fixed**: `import`, `export` - now properly handled with elicitation
-     - **Python templates**: ✅ **Ready in python-templates.ts** - CREATE_CURVE, ADD_CURVE_KEY, EVALUATE_CURVE
-     - **Implementation roadmap**: Connect tool handlers to Python templates for real execution
-  3. ✅ **GameMode Setup** (`manage_gamemode`) - **Fully Implemented** 2025-12-02
-     - Create multiplayer game framework (GameMode, GameState, PlayerState, PlayerController)
-     - Set default classes for multiplayer projects
-     - Configure replication modes (Full, Minimal, ClientPredicted)
-     - Setup input with Enhanced Input System
-     - **Features**: GAS integration, CommonUI integration, multiplayer-ready patterns
-     - **Status**: **All 4 actions implemented** - returns placeholder responses
-     - **Missing actions fixed**: `configure_replication`, `setup_input` - now properly handled with validation
-     - **Python templates**: ✅ **Ready in python-templates.ts** - CREATE_GAMEMODE_FRAMEWORK, SET_DEFAULT_CLASSES
-     - **Implementation roadmap**: Connect tool handlers to Python templates for real execution
- 4. ✅ **Actor Tags** (`manage_tags`) - **Fully Implemented** 2025-12-02
-      - Add/remove tags from actors
-      - Query actors by tag patterns with wildcards (`Enemy_*`, `*_Door`)
-      - Check if actors have specific tags
-      - Clear all tags from actors
-      - **Features**: AND/OR logic for tag queries, batch operations
-      - **Status**: **All 6 actions implemented** - returns placeholder responses
-      - **Missing actions fixed**: `get_all`, `clear` - now properly handled with elicitation
-      - **Python templates**: ✅ **Complete** in `python-templates.ts` - ADD_ACTOR_TAGS, REMOVE_ACTOR_TAGS, HAS_ACTOR_TAG, GET_ACTOR_TAGS, CLEAR_ACTOR_TAGS, QUERY_ACTORS_BY_TAG
- 5. ✅ **Splines** (`manage_spline`) - **Fully Implemented** 2025-12-04
-      - Create spline actors, add/update/remove points, inspect data, and sample along the curve
-      - Uses Python fallback utilities to ensure a spline component exists even when the default actor lacks one
-      - Docs/tests updated (`docs/unreal-tool-test-cases.md`, `tests/run-unreal-tool-tests.mjs`) with 4 new scenarios (create/add/get/sample)
-  6. ✅ **Component Management** (`manage_component`) - **Fully Implemented** 2025-12-04
-       - Add/remove/list components on placed level actors with attachment/mobility support
-       - Python helper resolves component classes from names/paths and ensures safe registration flows
-       - Documented and tested with add/get/remove automation loops
-  7. DataTables (`manage_datatable`)
-  8. NavMesh Config (`manage_navigation`)
+   - **Status**: WORKING ✅
 
+2. ✅ **Curves** (`manage_curves`) - ✅ RETURNS PLACEHOLDER (Python not connected yet)
+   - Create curve assets (FloatCurve, VectorCurve, TransformCurve)
+   - Add keyframes with interpolation settings
+   - Evaluate curves at specific times
+   - Import/export curve data (CSV/JSON)
+   - **Status**: All 5 actions return placeholder "would be created" responses
+   - **Next Step**: Connect Python templates in `consolidated-tool-handlers.ts`
 
+3. ✅ **GameMode Setup** (`manage_gamemode`) - ✅ RETURNS PLACEHOLDER (Python not connected yet)
+   - Create multiplayer game framework (GameMode, GameState, PlayerState, PlayerController)
+   - Set default classes for multiplayer projects
+   - Configure replication modes (Full, Minimal, ClientPredicted)
+   - Setup input with Enhanced Input System
+   - **Status**: All 4 actions return placeholder responses
+   - **Next Step**: Connect Python templates in `consolidated-tool-handlers.ts`
 
-## Key UE Systems to Support
+4. ✅ **Actor Tags** (`manage_tags`) - ✅ RETURNS PLACEHOLDER (Python not connected yet)
+   - Add/remove tags from actors
+   - Query actors by tag patterns with wildcards (`Enemy_*`, `*_Door`)
+   - Check if actors have specific tags
+   - Clear all tags from actors
+   - **Features**: AND/OR logic for tag queries, batch operations
+   - **Status**: All 6 actions return placeholder responses
+   - **Next Step**: Connect Python templates in `consolidated-tool-handlers.ts`
+
+5. ✅ **Splines** (`manage_spline`) - ❌ HAS BUG (Cannot create spline component)
+   - Create spline actors, add/update/remove points, inspect data, and sample along the curve
+   - **Status**: Fails with "Unable to create spline component" error
+   - **Issue**: Python spline spawning failing - needs investigation
+   - **Next Step**: Debug spline creation Python script
+
+6. ✅ **Component Management** (`manage_component`) - ✅ FULLY WORKING
+   - Add, remove, and list components on placed level actors with attachment/mobility support
+   - **Status**: `get` and `add` actions fully functional
+   - **Tested**: Added StaticMeshComponent to test actor successfully
+
+7. **Phase 7 Tools (Materials, Rendering, Input, Collision)** - ✅ ALL WORKING 2025-12-04
+   - All Phase 7 tools verified working: `manage_material`, `manage_rendering`, `manage_input`, `manage_collision`
+
+8. **Widget Text Modification** (`manage_ui`) - ✅ FULLY WORKING 2025-12-04
+   - **FIXED**: Created `manage_ui` tool with proper FText marshaling
+   - **Actions**: `set_actor_text` (basic), `set_textrender_text` (styled with color/size/alignment)
+   - **Features**: Unicode text support, RGB color (0.0-1.0 range), font sizing, text alignment
+   - **Implementation**: Python-based with proper `unreal.FText()` marshaling
+   - **Status**: Ready for testing with real actors in UE5.7
+ 
+### Active Tool Gaps (Dec 2025)
+- `query_level.get_all`/`get_by_*` currently respond with `success` but return empty payloads even when actors exist. Agents must confirm actor labels manually in the editor before running mutating commands and keep this limitation noted in TODO entries.
+- Use `manage_ui` → `set_actor_text` for TextRenderActor text modification. The tool handles FText marshaling properly, unlike the inspect tool.
+- For styled text (color, size, alignment), use `manage_ui` → `set_textrender_text` for full control.
+- When scripting story logic, use `manage_ui` for all text modifications since it properly handles UE5.7 FText format.
+ 
+ 
+ ## Key UE Systems to Support
+
 
 ### Gameplay Ability System (GAS)
 - **Pattern**: ASC on PlayerState (multiplayer-ready)

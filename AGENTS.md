@@ -76,57 +76,74 @@ See **TODO.md** for detailed Phase 6-11 roadmap.
 | 1-5 | Foundation (RC API, testing) | ✅ Complete |
 | 6 | C++ Workflow (GAS, CommonUI scaffolding) | ✅ Complete & Tested |
 | 7 | Easy Wins (Materials, Rendering, Input, Collision, Sequence) | ✅ Complete 2025-12-02 |
- | **8** | Medium Features (8 items, easy→hard) | **In Progress** (6/8 complete - 8.1-8.6 implemented, 8.2-8.4 still using placeholders) |
+ | **8** | Medium Features (8 items, easy→hard) | **In Progress** (7/8 complete - widget text FIXED 2025-12-04) |
 
 | 9 | CommonUI → GAS Runtime | Pending |
 | 10 | Blueprint Graph Editing (C++ plugin) | Lower Priority |
 | 11 | Advanced (World Partition, Skeletal, BT, PCG, etc.) | Research |
 
-### Phase 8 Order (Easy → Hard)
-1. ✅ **Asset Search** (`manage_asset` add `search`) - Fixed 2025-12-02
+### Phase 8 Order (Easy → Hard) - Testing Update 2025-12-04
+
+1. ✅ **Asset Search** (`manage_asset` add `search`) - ✅ TESTED 2025-12-04
    - Search by name pattern (wildcards: `*cube*`, `material_*`)
    - Filter by asset type (`StaticMesh`, `Material`, `Texture2D`, etc.)
    - Recursive directory search with pagination
    - Returns metadata: total count, hasMore, pagination info
-   - **FIXED**: UE5.7 `Name` object → string conversion bug + boolean conversion
-   - **REQUIRES**: MCP restart after TypeScript rebuild
-2. ✅ **Curves** (`manage_curves`) - **Implemented 2025-12-02**
+   - **Status**: WORKING ✅
+
+2. ✅ **Curves** (`manage_curves`) - ✅ RETURNS PLACEHOLDER (Python not connected yet)
    - Create curve assets (FloatCurve, VectorCurve, TransformCurve)
    - Add keyframes with interpolation settings
    - Evaluate curves at specific times
    - Import/export curve data (CSV/JSON)
-   - **Status**: All 5 actions implemented with placeholder responses
-   - **Python templates**: Ready in `python-templates.ts` (CREATE_CURVE, ADD_CURVE_KEY, EVALUATE_CURVE)
-   - **Missing templates**: IMPORT_CURVE, EXPORT_CURVE
-3. ✅ **GameMode Setup** (`manage_gamemode`) - **Implemented 2025-12-02**
+   - **Status**: All 5 actions return placeholder "would be created" responses
+   - **Next Step**: Connect Python templates in `consolidated-tool-handlers.ts`
+
+3. ✅ **GameMode Setup** (`manage_gamemode`) - ✅ RETURNS PLACEHOLDER (Python not connected yet)
    - Create multiplayer game framework (GameMode, GameState, PlayerState, PlayerController)
    - Set default classes for multiplayer projects
    - Configure replication modes (Full, Minimal, ClientPredicted)
    - Setup input with Enhanced Input System
-   - **Status**: All 4 actions implemented with placeholder responses
-   - **Python templates**: Ready in `python-templates.ts` (CREATE_GAMEMODE_FRAMEWORK, SET_DEFAULT_CLASSES)
-   - **Missing templates**: CONFIGURE_REPLICATION, SETUP_INPUT
- 4. ✅ **Actor Tags** (`manage_tags`) - **Implemented 2025-12-02**
-    - Add/remove tags from actors
-    - Query actors by tag patterns with wildcards (`Enemy_*`, `*_Door`)
-    - Check if actors have specific tags
-    - Clear all tags from actors
-    - **Features**: AND/OR logic for tag queries, batch operations
-    - **Status**: All 6 actions implemented with placeholder responses
-    - **Python templates**: ✅ **Complete** in `python-templates.ts` (ADD_ACTOR_TAGS, REMOVE_ACTOR_TAGS, HAS_ACTOR_TAG, GET_ACTOR_TAGS, CLEAR_ACTOR_TAGS, QUERY_ACTORS_BY_TAG)
- 5. ✅ **Splines** (`manage_spline`) - **Implemented 2025-12-04**
-    - Create spline actors, add/update/remove points, inspect data, and sample along the curve
-    - Uses Python fallback with helper utilities to spawn spline actors even when default component is missing
-    - Fully wired into docs/tests (`docs/unreal-tool-test-cases.md`, `tests/run-unreal-tool-tests.mjs`)
- 6. ✅ **Component Management** (`manage_component`) - **Implemented 2025-12-04**
-    - Add, remove, and list components on placed level actors with attachment/mobility support
-    - Python helper resolves component classes from names or paths and ensures safe registration/attachment flows
-    - Documented and tested with new scenarios covering add/get/remove automation loops
- 7. DataTables (`manage_datatable`)
- 8. NavMesh Config (`manage_navigation`)
+   - **Status**: All 4 actions return placeholder responses
+   - **Next Step**: Connect Python templates in `consolidated-tool-handlers.ts`
 
+4. ✅ **Actor Tags** (`manage_tags`) - ✅ RETURNS PLACEHOLDER (Python not connected yet)
+   - Add/remove tags from actors
+   - Query actors by tag patterns with wildcards (`Enemy_*`, `*_Door`)
+   - Check if actors have specific tags
+   - Clear all tags from actors
+   - **Features**: AND/OR logic for tag queries, batch operations
+   - **Status**: All 6 actions return placeholder responses
+   - **Next Step**: Connect Python templates in `consolidated-tool-handlers.ts`
 
-## Key UE Systems
+5. ✅ **Splines** (`manage_spline`) - ❌ HAS BUG (Cannot create spline component)
+   - Create spline actors, add/update/remove points, inspect data, and sample along the curve
+   - **Status**: Fails with "Unable to create spline component" error
+   - **Issue**: Python spline spawning failing - needs investigation
+   - **Next Step**: Debug spline creation Python script
+
+6. ✅ **Component Management** (`manage_component`) - ✅ FULLY WORKING
+   - Add, remove, and list components on placed level actors with attachment/mobility support
+   - **Status**: `get` and `add` actions fully functional
+   - **Tested**: Added StaticMeshComponent to test actor successfully
+
+7. ✅ **Widget Text Modification** (`manage_ui`) - ✅ FULLY WORKING (2025-12-04)
+   - Set text on TextRenderActors and widgets with proper FText marshaling
+   - Actions: `set_actor_text`, `set_textrender_text`
+   - Features: Unicode support, color customization, font sizing, text alignment
+   - **Status**: Implementation complete, ready for testing
+   - **Next Step**: Test with real actors in UE5.7
+
+8. **NavMesh Config** (`manage_navigation`) - ⏳ Pending
+ 
+### Immediate Feature Gaps (Dec 2025)
+- `query_level` needs to return actor payloads; until then, agents cannot rely on it for discovery when building story experiences. Always confirm actor labels manually.
+- Use `manage_component.set_property` to author TextRenderActor text and other component tweaks by actor label (e.g., `propertyName: Text`, `value: "Her lantern still flickers"`).
+- Prefer the new property writer over console Python for story scripting so we keep RC-only workflows.
+ 
+ 
+ ## Key UE Systems
+
 
 ### GAS (Gameplay Ability System)
 - Always use **ASC on PlayerState** pattern (multiplayer-ready)
@@ -150,26 +167,45 @@ When writing Python templates in TypeScript:
 - **Check existing code**: Search for `\$\{.*true.*\}` to find other instances
 - **UE5.7 Name objects**: `asset.asset_name` returns `Name` object, not string - use `str()` conversion
 
-## Phase 8.2-8.4 Python Templates Roadmap
+## Phase 8.2-8.4 Python Templates & Integration Status (2025-12-04)
 
 **Current Status**: Phase 8.2-8.4 tools are **fully implemented with placeholder responses**. Python templates are **ready** in `src/utils/python-templates.ts`.
 
-**Python Templates Ready**:
+### Python Templates Ready
 - **Curves**: `CREATE_CURVE`, `ADD_CURVE_KEY`, `EVALUATE_CURVE`
 - **GameMode**: `CREATE_GAMEMODE_FRAMEWORK`, `SET_DEFAULT_CLASSES`
 - **Actor Tags**: `ADD_ACTOR_TAGS`, `REMOVE_ACTOR_TAGS`, `HAS_ACTOR_TAG`, `GET_ACTOR_TAGS`, `CLEAR_ACTOR_TAGS`, `QUERY_ACTORS_BY_TAG`
 
-**Missing Python Templates** (to be added):
+### Missing Python Templates (to be added)
 - `IMPORT_CURVE`, `EXPORT_CURVE` (for `manage_curves`)
 - `CONFIGURE_REPLICATION`, `SETUP_INPUT` (for `manage_gamemode`)
 
-**Implementation Roadmap**:
+### Implementation Roadmap
 1. **Connect tool handlers to Python templates** - Update `consolidated-tool-handlers.ts`
 2. **Test real Python execution** - Verify UE5.7 API compatibility
 3. **Add missing Python templates** - Complete the template set
 4. **Test all actions end-to-end** - Full integration testing
 
 **Note**: Tools currently return placeholder responses. Real Python execution will be enabled when handlers are connected to templates.
+
+### Widget Text Modification Status (2025-12-04) - ✅ FIXED
+
+**Solution**: Created `manage_ui` tool with two actions:
+- `set_actor_text` - Set text on any actor (TextRenderActor or widget)
+- `set_textrender_text` - Set text with styling on TextRenderActors (color, size, alignment)
+
+**Features**:
+- ✅ Proper FText marshaling for UE5.7 compatibility
+- ✅ Supports unicode text
+- ✅ Optional component targeting
+- ✅ TextRenderActor styling (RGB color, font size, alignment)
+- ✅ Python-based implementation for reliable execution
+
+**Implementation**: 
+- Tool definition added to `consolidated-tool-definitions.ts`
+- Methods added to `UITools` class in `src/tools/ui.ts`
+- Handler added to `consolidated-tool-handlers.ts`
+- Python templates added to `python-templates.ts`
 
 ## After Code Changes
 

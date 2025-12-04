@@ -1,8 +1,10 @@
 // UI tools for Unreal Engine
 import { UnrealBridge } from '../unreal-bridge.js';
 import { bestEffortInterpretedText, interpretStandardResult } from '../utils/result-helpers.js';
+import { escapePythonString } from '../utils/python.js';
 
 export class UITools {
+
   constructor(private bridge: UnrealBridge) {}
 
   // Create widget blueprint
@@ -11,37 +13,72 @@ export class UITools {
     type?: 'HUD' | 'Menu' | 'Inventory' | 'Dialog' | 'Custom';
     savePath?: string;
   }) {
-    const path = params.savePath || '/Game/UI/Widgets';
+    const trimmedName = params.name?.trim();
+    if (!trimmedName) {
+      return { success: false, error: 'Widget name is required' };
+    }
+
+    const sanitizedName = trimmedName.replace(/[^A-Za-z0-9_]/g, '_') || 'Widget';
+    const normalizedPathInput = params.savePath?.trim();
+    const resolvedPath = normalizedPathInput && normalizedPathInput.startsWith('/Game/')
+      ? normalizedPathInput
+      : '/Game/UI/Widgets';
+    const safeName = escapePythonString(sanitizedName);
+    const safePath = escapePythonString(resolvedPath);
+    const validationWarnings: string[] = [];
+    if (sanitizedName !== trimmedName) {
+      validationWarnings.push(`Widget name sanitized to ${sanitizedName}`);
+    }
+
     const py = `
 import unreal
 import json
-name = r"${params.name}"
-path = r"${path}"
+name = "${safeName}"
+path = "${safePath}"
+full_path = f"{path}/{name}"
+result = {
+    'success': False,
+    'message': '',
+    'error': '',
+    'exists': False,
+    'path': full_path,
+    'details': []
+}
 try:
-    asset_tools = unreal.AssetToolsHelpers.get_asset_tools()
-    try:
-        factory = unreal.WidgetBlueprintFactory()
-    except Exception:
-        factory = None
-    if not factory:
-        print('RESULT:' + json.dumps({'success': False, 'error': 'WidgetBlueprintFactory unavailable'}))
+    editor_lib = unreal.EditorAssetLibrary
+    if not editor_lib.does_directory_exist(path):
+        editor_lib.make_directory(path)
+    if editor_lib.does_asset_exist(full_path):
+        result['success'] = True
+        result['exists'] = True
+        result['message'] = f"Widget already exists at {full_path}"
     else:
-        # Try setting parent_class in a version-tolerant way
+        asset_tools = unreal.AssetToolsHelpers.get_asset_tools()
+        factory = None
         try:
-            factory.parent_class = unreal.UserWidget
+            factory = unreal.WidgetBlueprintFactory()
         except Exception:
+            pass
+        if not factory:
+            result['error'] = 'WidgetBlueprintFactory unavailable'
+        else:
             try:
                 factory.set_editor_property('parent_class', unreal.UserWidget)
             except Exception:
-                pass
-        asset = asset_tools.create_asset(asset_name=name, package_path=path, asset_class=unreal.WidgetBlueprint, factory=factory)
-        if asset:
-            unreal.EditorAssetLibrary.save_asset(f"{path}/{name}")
-            print('RESULT:' + json.dumps({'success': True}))
-        else:
-            print('RESULT:' + json.dumps({'success': False, 'error': 'Failed to create WidgetBlueprint'}))
+                try:
+                    factory.parent_class = unreal.UserWidget
+                except Exception:
+                    pass
+            asset = asset_tools.create_asset(asset_name=name, package_path=path, asset_class=unreal.WidgetBlueprint, factory=factory)
+            if asset:
+                editor_lib.save_asset(full_path)
+                result['success'] = True
+                result['message'] = f"Widget blueprint created at {full_path}"
+            else:
+                result['error'] = 'Failed to create WidgetBlueprint'
 except Exception as e:
-    print('RESULT:' + json.dumps({'success': False, 'error': str(e)}))
+    result['error'] = str(e)
+print('RESULT:' + json.dumps(result))
 `.trim();
     try {
       const resp = await this.bridge.executePython(py);
@@ -50,19 +87,31 @@ except Exception as e:
         failureMessage: 'Failed to create WidgetBlueprint'
       });
 
+      const carriedWarnings = Array.isArray(interpreted.warnings) ? interpreted.warnings : [];
+      const allWarnings = [...carriedWarnings, ...validationWarnings].filter(Boolean);
+
       if (interpreted.success) {
-        return { success: true, message: interpreted.message };
+        const payload = interpreted.payload ?? {};
+        return {
+          success: true,
+          message: interpreted.message,
+          path: payload.path,
+          exists: payload.exists,
+          warnings: allWarnings.length ? allWarnings : undefined
+        };
       }
 
       return {
         success: false,
         error: interpreted.error ?? 'Failed to create widget blueprint',
-        details: bestEffortInterpretedText(interpreted)
+        details: bestEffortInterpretedText(interpreted),
+        warnings: allWarnings.length ? allWarnings : undefined
       };
     } catch (e) {
       return { success: false, error: `Failed to create widget blueprint: ${e}` };
     }
   }
+
 
   // Add widget component
   async addWidgetComponent(params: {
@@ -191,10 +240,11 @@ except Exception as e:
     if (!widgetName) {
       return { success: false, error: 'widgetName is required' };
     }
+    const escapedWidgetName = escapePythonString(widgetName);
 
     const verifyScript = `
 import unreal, json
-name = r"${widgetName}"
+name = "${escapedWidgetName}"
 candidates = []
 if name.startswith('/Game/'):
     candidates.append(name)
@@ -203,12 +253,22 @@ else:
     candidates.append(f"/Game/{name}")
 
 found_path = ''
+asset_name = ''
+asset_class = ''
 for path in candidates:
-    if unreal.EditorAssetLibrary.does_asset_exist(path):
-        found_path = path
-        break
+    if not unreal.EditorAssetLibrary.does_asset_exist(path):
+        continue
+    asset_data = unreal.EditorAssetLibrary.find_asset_data(path)
+    if not asset_data:
+        continue
+    asset_class = asset_data.asset_class or ''
+    if asset_class not in ('WidgetBlueprint', 'WidgetBlueprintGeneratedClass'):
+        continue
+    found_path = path
+    asset_name = asset_data.asset_name
+    break
 
-print('RESULT:' + json.dumps({'success': bool(found_path), 'path': found_path, 'candidates': candidates}))
+print('RESULT:' + json.dumps({'success': bool(found_path), 'path': found_path, 'assetName': asset_name, 'assetClass': asset_class, 'candidates': candidates}))
 `.trim();
 
     const verify = await this.bridge.executePythonWithResult(verifyScript);
@@ -216,21 +276,26 @@ print('RESULT:' + json.dumps({'success': bool(found_path), 'path': found_path, '
       return { success: false, error: `Widget asset not found for ${widgetName}` };
     }
 
+    const resolvedAssetName = typeof verify.assetName === 'string' && verify.assetName.trim() !== ''
+      ? verify.assetName.trim()
+      : widgetName;
     const command = params.visible 
-      ? `ShowWidget ${widgetName} ${playerIndex}`
-      : `HideWidget ${widgetName} ${playerIndex}`;
+      ? `ShowWidget ${resolvedAssetName} ${playerIndex}`
+      : `HideWidget ${resolvedAssetName} ${playerIndex}`;
 
     const raw = await this.bridge.executeConsoleCommand(command);
     const summary = this.bridge.summarizeConsoleCommand(command, raw);
 
     return {
       success: true,
-      message: params.visible ? `Widget ${widgetName} show command issued` : `Widget ${widgetName} hide command issued`,
+      message: params.visible ? `Widget ${resolvedAssetName} show command issued` : `Widget ${resolvedAssetName} hide command issued`,
       command: summary.command,
       output: summary.output || undefined,
-      logLines: summary.logLines?.length ? summary.logLines : undefined
+      logLines: summary.logLines?.length ? summary.logLines : undefined,
+      assetPath: verify.path
     };
   }
+
 
   // Add widget to viewport
   async addWidgetToViewport(params: {
@@ -527,4 +592,345 @@ except Exception as e:
     const command = `ShowNotification "${params.text}" ${duration} ${type} ${position}`;
     return this.bridge.executeConsoleCommand(command);
   }
+
+  // Set text on actor with proper FText marshaling (Python-based)
+  async setActorText(params: {
+    actorName: string;
+    text: string;
+    componentName?: string;
+  }) {
+    if (!params.actorName?.trim()) {
+      return { success: false, error: 'Actor name is required' };
+    }
+    if (!params.text) {
+      return { success: false, error: 'Text is required' };
+    }
+
+    const safeActorName = escapePythonString(params.actorName);
+    const safeText = escapePythonString(params.text);
+    const safeComponentName = params.componentName ? escapePythonString(params.componentName) : '';
+
+    const py = `
+import unreal
+import json
+import sys
+
+try:
+     # DEBUG: Log all inputs
+     print(f"DEBUG: setActorText started", file=sys.stderr)
+     
+     actor_name = "${safeActorName}"
+     text_value = "${safeText}"
+     component_name = "${safeComponentName}"
+     
+     print(f"DEBUG: Parameters - actor_name='{actor_name}', text_value='{text_value}', component_name='{component_name}'", file=sys.stderr)
+     
+     # Get actor subsystem
+     print(f"DEBUG: Getting EditorActorSubsystem...", file=sys.stderr)
+     subsys = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
+     print(f"DEBUG: Subsystem result: {subsys}, type: {type(subsys)}", file=sys.stderr)
+     
+     if not subsys:
+         print(f"DEBUG: EditorActorSubsystem is None/False", file=sys.stderr)
+         print(f"RESULT:{json.dumps({'success': False, 'error': 'EditorActorSubsystem not available'})}")
+         exit(0)
+     
+     # Find actor by name
+     print(f"DEBUG: Getting all level actors...", file=sys.stderr)
+     actors = subsys.get_all_level_actors()
+     print(f"DEBUG: Found {len(actors)} actors", file=sys.stderr)
+     
+     target_actor = None
+     for i, actor in enumerate(actors):
+         label = actor.get_actor_label()
+         print(f"DEBUG: Actor {i}: label='{label}', class={actor.get_class().get_name()}", file=sys.stderr)
+         if label.lower() == actor_name.lower():
+             target_actor = actor
+             print(f"DEBUG: MATCH FOUND at index {i}", file=sys.stderr)
+             break
+     
+     if not target_actor:
+         print(f"DEBUG: No actor found matching '{actor_name}'", file=sys.stderr)
+         print(f"RESULT:{json.dumps({'success': False, 'error': f'Actor "{actor_name}" not found'})}")
+         exit(0)
+     
+     print(f"DEBUG: Target actor found: {target_actor.get_class().get_name()}", file=sys.stderr)
+     
+     # Create FText from string
+     print(f"DEBUG: Creating FText from: {text_value}", file=sys.stderr)
+     try:
+         ftext = unreal.FText(text_value)
+         print(f"DEBUG: FText created successfully: {ftext}", file=sys.stderr)
+     except Exception as ftext_err:
+         print(f"DEBUG: FText creation failed: {ftext_err}", file=sys.stderr)
+         raise
+     
+     # Try to set text on TextRenderComponent if it exists
+     if component_name:
+         print(f"DEBUG: Component name specified: {component_name}", file=sys.stderr)
+         component = target_actor.get_component_by_class(unreal.TextRenderComponent)
+         if component:
+             component.set_editor_property('text', ftext)
+             print(f"RESULT:{json.dumps({
+                 'success': True,
+                 'actor': actor_name,
+                 'component': 'TextRenderComponent',
+                 'newText': text_value,
+                 'message': f'Text updated on "{actor_name}"'
+             })}")
+             exit(0)
+     
+     # Try direct property assignment
+     print(f"DEBUG: Attempting direct property assignment on actor", file=sys.stderr)
+     try:
+         target_actor.set_editor_property('text', ftext)
+         print(f"DEBUG: Direct assignment succeeded", file=sys.stderr)
+         print(f"RESULT:{json.dumps({
+             'success': True,
+             'actor': actor_name,
+             'newText': text_value,
+             'message': f'Text updated on "{actor_name}"'
+         })}")
+     except Exception as direct_err:
+         print(f"DEBUG: Direct assignment failed: {direct_err}", file=sys.stderr)
+         # Fallback: try through TextRenderComponent
+         print(f"DEBUG: Attempting TextRenderComponent fallback", file=sys.stderr)
+         text_component = target_actor.get_component_by_class(unreal.TextRenderComponent)
+         print(f"DEBUG: TextRenderComponent search result: {text_component}", file=sys.stderr)
+         if text_component:
+             print(f"DEBUG: Setting text on TextRenderComponent", file=sys.stderr)
+             text_component.set_editor_property('text', ftext)
+             print(f"RESULT:{json.dumps({
+                 'success': True,
+                 'actor': actor_name,
+                 'component': 'TextRenderComponent',
+                 'newText': text_value,
+                 'message': f'Text updated on "{actor_name}" via TextRenderComponent'
+             })}")
+         else:
+             print(f"DEBUG: TextRenderComponent not found on actor", file=sys.stderr)
+             print(f"RESULT:{json.dumps({'success': False, 'error': f'Could not find text property on "{actor_name}"'})}")
+     
+except Exception as e:
+     print(f"DEBUG: Exception caught: {type(e).__name__}: {e}", file=sys.stderr)
+     import traceback
+     print(f"DEBUG: Traceback:\\n{traceback.format_exc()}", file=sys.stderr)
+     print(f"RESULT:{json.dumps({'success': False, 'error': str(e)})}")
+    `.trim();
+
+      try {
+        console.error('[setActorText DEBUG] Executing Python script...');
+        const resp = await this.bridge.executePython(py);
+        console.error('[setActorText DEBUG] Raw response:', JSON.stringify(resp, null, 2));
+        console.error('[setActorText DEBUG] Response type:', typeof resp);
+        console.error('[setActorText DEBUG] Response keys:', Object.keys(resp || {}));
+        
+        const interpreted = interpretStandardResult(resp, {
+          successMessage: 'Text updated successfully',
+          failureMessage: 'Failed to update text'
+        });
+        
+        console.error('[setActorText DEBUG] Interpreted result:', JSON.stringify(interpreted, null, 2));
+
+        return {
+          ...interpreted,
+          actor: params.actorName,
+          newText: params.text
+        };
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        console.error('[setActorText DEBUG] Exception:', errorMsg);
+        return {
+          success: false,
+          error: `Failed to set widget text: ${errorMsg}`,
+          actor: params.actorName
+        };
+      }
+   }
+
+   // Set text and styling on a TextRenderActor
+   async setTextRenderText(params: {
+     actorName: string;
+     text: string;
+     textColorR?: number;
+     textColorG?: number;
+     textColorB?: number;
+     fontSize?: number;
+     horizontalAlignment?: number;
+     verticalAlignment?: number;
+   }) {
+     if (!params.actorName?.trim()) {
+       return { success: false, error: 'Actor name is required' };
+     }
+     if (!params.text) {
+       return { success: false, error: 'Text is required' };
+     }
+
+     const safeActorName = escapePythonString(params.actorName);
+     const safeText = escapePythonString(params.text);
+     const textColorR = params.textColorR ?? 1.0;
+     const textColorG = params.textColorG ?? 1.0;
+     const textColorB = params.textColorB ?? 1.0;
+     const fontSize = params.fontSize ?? 0;
+     const hAlign = params.horizontalAlignment ?? -1;
+     const vAlign = params.verticalAlignment ?? -1;
+
+      const py = `
+import unreal
+import json
+import sys
+
+try:
+     # DEBUG: Log all inputs
+     print(f"DEBUG: setTextRenderText started", file=sys.stderr)
+     
+     actor_name = "${safeActorName}"
+     text_value = "${safeText}"
+     text_color_r = ${textColorR}
+     text_color_g = ${textColorG}
+     text_color_b = ${textColorB}
+     font_size = ${fontSize}
+     h_align = ${hAlign}
+     v_align = ${vAlign}
+     
+     print(f"DEBUG: Parameters - actor='{actor_name}', text='{text_value}', color=({text_color_r},{text_color_g},{text_color_b}), size={font_size}, align=({h_align},{v_align})", file=sys.stderr)
+     
+     # Get actor subsystem
+     print(f"DEBUG: Getting EditorActorSubsystem...", file=sys.stderr)
+     subsys = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
+     print(f"DEBUG: Subsystem: {subsys}", file=sys.stderr)
+     
+     if not subsys:
+         print(f"DEBUG: EditorActorSubsystem is None/False", file=sys.stderr)
+         print(f"RESULT:{json.dumps({'success': False, 'error': 'EditorActorSubsystem not available'})}")
+         exit(0)
+     
+     # Find TextRenderActor by name
+     print(f"DEBUG: Getting all level actors...", file=sys.stderr)
+     actors = subsys.get_all_level_actors()
+     print(f"DEBUG: Found {len(actors)} actors", file=sys.stderr)
+     
+     target_actor = None
+     for i, actor in enumerate(actors):
+         label = actor.get_actor_label()
+         print(f"DEBUG: Actor {i}: label='{label}', class={actor.get_class().get_name()}", file=sys.stderr)
+         if label.lower() == actor_name.lower():
+             target_actor = actor
+             print(f"DEBUG: MATCH FOUND at index {i}", file=sys.stderr)
+             break
+     
+     if not target_actor:
+         print(f"DEBUG: No actor found matching '{actor_name}'", file=sys.stderr)
+         print(f"RESULT:{json.dumps({'success': False, 'error': f'TextRenderActor "{actor_name}" not found'})}")
+         exit(0)
+     
+     # Create FText from string
+     print(f"DEBUG: Creating FText...", file=sys.stderr)
+     try:
+         ftext = unreal.FText(text_value)
+         print(f"DEBUG: FText created successfully", file=sys.stderr)
+     except Exception as ftext_err:
+         print(f"DEBUG: FText creation failed: {ftext_err}", file=sys.stderr)
+         raise
+     
+     # Get TextRenderComponent
+     print(f"DEBUG: Getting TextRenderComponent from actor...", file=sys.stderr)
+     text_component = target_actor.get_component_by_class(unreal.TextRenderComponent)
+     print(f"DEBUG: TextRenderComponent: {text_component}", file=sys.stderr)
+     
+     if not text_component:
+         print(f"DEBUG: TextRenderComponent not found", file=sys.stderr)
+         print(f"RESULT:{json.dumps({'success': False, 'error': f'TextRenderComponent not found on "{actor_name}"'})}")
+         exit(0)
+     
+     # Set text
+     print(f"DEBUG: Setting text property...", file=sys.stderr)
+     try:
+         text_component.set_editor_property('text', ftext)
+         print(f"DEBUG: Text property set successfully", file=sys.stderr)
+     except Exception as text_err:
+         print(f"DEBUG: Text property set failed: {text_err}", file=sys.stderr)
+         raise
+     
+     # Set color
+     if text_color_r or text_color_g or text_color_b:
+         print(f"DEBUG: Setting color to ({text_color_r}, {text_color_g}, {text_color_b})", file=sys.stderr)
+         try:
+             text_color = unreal.LinearColor(text_color_r, text_color_g, text_color_b, 1.0)
+             text_component.set_editor_property('text_render_color', text_color)
+             print(f"DEBUG: Color set successfully", file=sys.stderr)
+         except Exception as color_err:
+             print(f"DEBUG: Color set failed: {color_err}", file=sys.stderr)
+     
+     # Set text size
+     if font_size > 0:
+         print(f"DEBUG: Setting font size to {font_size}", file=sys.stderr)
+         try:
+             text_component.set_editor_property('world_size', font_size)
+             print(f"DEBUG: Font size set successfully", file=sys.stderr)
+         except Exception as size_err:
+             print(f"DEBUG: Font size set failed: {size_err}", file=sys.stderr)
+     
+     # Set alignment
+     if h_align >= 0:
+         print(f"DEBUG: Setting horizontal alignment to {h_align}", file=sys.stderr)
+         try:
+             text_component.set_editor_property('horizontal_alignment', h_align)
+             print(f"DEBUG: Horizontal alignment set", file=sys.stderr)
+         except Exception as align_err:
+             print(f"DEBUG: Horizontal alignment failed: {align_err}", file=sys.stderr)
+     
+     if v_align >= 0:
+         print(f"DEBUG: Setting vertical alignment to {v_align}", file=sys.stderr)
+         try:
+             text_component.set_editor_property('vertical_alignment', v_align)
+             print(f"DEBUG: Vertical alignment set", file=sys.stderr)
+         except Exception as valign_err:
+             print(f"DEBUG: Vertical alignment failed: {valign_err}", file=sys.stderr)
+     
+     print(f"RESULT:{json.dumps({
+         'success': True,
+         'actor': actor_name,
+         'text': text_value,
+         'color': [text_color_r, text_color_g, text_color_b],
+         'size': font_size,
+         'message': f'TextRenderActor "{actor_name}" updated successfully'
+     })}")
+     
+except Exception as e:
+     print(f"DEBUG: Exception caught: {type(e).__name__}: {e}", file=sys.stderr)
+     import traceback
+     print(f"DEBUG: Traceback:\\n{traceback.format_exc()}", file=sys.stderr)
+     print(f"RESULT:{json.dumps({'success': False, 'error': str(e)})}")
+    `.trim();
+
+      try {
+        console.error('[setTextRenderText DEBUG] Executing Python script...');
+        const resp = await this.bridge.executePython(py);
+        console.error('[setTextRenderText DEBUG] Raw response:', JSON.stringify(resp, null, 2));
+        console.error('[setTextRenderText DEBUG] Response type:', typeof resp);
+        console.error('[setTextRenderText DEBUG] Response keys:', Object.keys(resp || {}));
+        
+        const interpreted = interpretStandardResult(resp, {
+          successMessage: 'TextRender updated successfully',
+          failureMessage: 'Failed to update TextRender text'
+        });
+        
+        console.error('[setTextRenderText DEBUG] Interpreted result:', JSON.stringify(interpreted, null, 2));
+
+        return {
+          ...interpreted,
+          actor: params.actorName,
+          newText: params.text
+        };
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        console.error('[setTextRenderText DEBUG] Exception:', errorMsg);
+        return {
+          success: false,
+          error: `Failed to set TextRender text: ${errorMsg}`,
+          actor: params.actorName
+        };
+      }
+   }
 }
