@@ -22,6 +22,26 @@ import {
   getElicitationTimeoutMs,
   cleanObject
 } from './handlers/handler-utils.js';
+import { PYTHON_TEMPLATES } from '../utils/python-templates.js';
+
+// Helper to fill Python template with variables
+function fillTemplate(template: { script: string }, variables: Record<string, any>): string {
+  let script = template.script;
+  for (const [key, value] of Object.entries(variables)) {
+    const placeholder = `{${key}}`;
+    let replacement: string;
+    if (value === true) {
+      replacement = 'True';
+    } else if (value === false) {
+      replacement = 'False';
+    } else {
+      replacement = String(value);
+    }
+    // Use regex replace to replace all occurrences
+    script = script.replace(new RegExp(placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), replacement);
+  }
+  return script;
+}
 
 export async function handleConsolidatedToolCall(
   name: string,
@@ -2278,108 +2298,174 @@ case 'inspect':
       // 24. CURVES MANAGEMENT - Phase 8.2
       case 'manage_curves':
         switch (requireAction(args)) {
-          case 'create': {
-            await elicitMissingPrimitiveArgs(
-              tools,
-              args,
-              'Provide details for manage_curves.create',
-              {
-                name: {
-                  type: 'string',
-                  title: 'Curve Name',
-                  description: 'Name for the new curve asset'
-                },
-                path: {
-                  type: 'string',
-                  title: 'Save Path',
-                  description: 'Content path where curve will be saved (e.g., /Game/Curves)'
-                },
-                curveType: {
-                  type: 'string',
-                  title: 'Curve Type',
-                  description: 'Type of curve (FloatCurve, VectorCurve, TransformCurve)'
-                }
-              }
-            );
-            const name = requireNonEmptyString(args.name, 'name', 'Missing required parameter: name');
-            const path = requireNonEmptyString(args.path, 'path', 'Missing required parameter: path');
-            const curveType = requireNonEmptyString(args.curveType, 'curveType', 'Missing required parameter: curveType');
-            
-            // TODO: Implement curveTools.createCurve
-            return cleanObject({
-              success: true,
-              message: `Curve ${name} of type ${curveType} would be created at ${path}`,
-              curvePath: `${path}/${name}`,
-              warning: 'Curve tools implementation pending - this is a placeholder'
-            });
-          }
-          case 'add_key': {
-            await elicitMissingPrimitiveArgs(
-              tools,
-              args,
-              'Provide details for manage_curves.add_key',
-              {
-                curvePath: {
-                  type: 'string',
-                  title: 'Curve Path',
-                  description: 'Content path to existing curve asset'
-                },
-                time: {
-                  type: 'number',
-                  title: 'Time',
-                  description: 'Time value for keyframe'
-                }
-              }
-            );
-            const curvePath = requireNonEmptyString(args.curvePath, 'curvePath', 'Missing required parameter: curvePath');
-            const time = typeof args.time === 'number' ? args.time : parseFloat(args.time);
-            if (isNaN(time)) {
-              throw new Error('Invalid time parameter: must be a number');
-            }
-            
-            // TODO: Implement curveTools.addKey
-            return cleanObject({
-              success: true,
-              message: `Key would be added to ${curvePath} at time ${time}`,
-              curvePath,
-              time,
-              warning: 'Curve tools implementation pending - this is a placeholder'
-            });
-          }
-          case 'evaluate': {
-            await elicitMissingPrimitiveArgs(
-              tools,
-              args,
-              'Provide details for manage_curves.evaluate',
-              {
-                curvePath: {
-                  type: 'string',
-                  title: 'Curve Path',
-                  description: 'Content path to existing curve asset'
-                },
-                time: {
-                  type: 'number',
-                  title: 'Time',
-                  description: 'Time value to evaluate at'
-                }
-              }
-            );
-            const curvePath = requireNonEmptyString(args.curvePath, 'curvePath', 'Missing required parameter: curvePath');
-            const time = typeof args.time === 'number' ? args.time : parseFloat(args.time);
-            if (isNaN(time)) {
-              throw new Error('Invalid time parameter: must be a number');
-            }
-            
-            // TODO: Implement curveTools.evaluate
-            return cleanObject({
-              success: true,
-              message: `Curve ${curvePath} would be evaluated at time ${time}`,
-              curvePath,
-              time,
-              value: 0.0,
-              warning: 'Curve tools implementation pending - this is a placeholder'
-            });
-          }
+           case 'create': {
+             await elicitMissingPrimitiveArgs(
+               tools,
+               args,
+               'Provide details for manage_curves.create',
+               {
+                 name: {
+                   type: 'string',
+                   title: 'Curve Name',
+                   description: 'Name for the new curve asset'
+                 },
+                 path: {
+                   type: 'string',
+                   title: 'Save Path',
+                   description: 'Content path where curve will be saved (e.g., /Game/Curves)'
+                 },
+                 curveType: {
+                   type: 'string',
+                   title: 'Curve Type',
+                   description: 'Type of curve (FloatCurve, VectorCurve, TransformCurve)'
+                 }
+               }
+             );
+             const name = requireNonEmptyString(args.name, 'name', 'Missing required parameter: name');
+             const path = requireNonEmptyString(args.path, 'path', 'Missing required parameter: path');
+             const curveType = requireNonEmptyString(args.curveType, 'curveType', 'Missing required parameter: curveType');
+             
+             try {
+               // Execute Python template to create curve
+               const script = fillTemplate(PYTHON_TEMPLATES.CREATE_CURVE, {
+                 name,
+                 path,
+                 curve_type: curveType
+               });
+               
+               const result = await tools.bridge.executePythonWithResult(script);
+               if (result?.success) {
+                 return cleanObject({
+                   success: true,
+                   curvePath: result.curvePath || `${path}/${name}`,
+                   keyCount: result.keyCount || 0,
+                   message: result.message || `Curve ${name} created successfully`
+                 });
+               } else {
+                 return cleanObject({
+                   success: false,
+                   error: result?.error || 'Failed to create curve'
+                 });
+               }
+             } catch (e) {
+               return cleanObject({
+                 success: false,
+                 error: `Failed to create curve: ${e instanceof Error ? e.message : String(e)}`
+               });
+             }
+           }
+           case 'add_key': {
+             await elicitMissingPrimitiveArgs(
+               tools,
+               args,
+               'Provide details for manage_curves.add_key',
+               {
+                 curvePath: {
+                   type: 'string',
+                   title: 'Curve Path',
+                   description: 'Content path to existing curve asset'
+                 },
+                 time: {
+                   type: 'number',
+                   title: 'Time',
+                   description: 'Time value for keyframe'
+                 }
+               }
+             );
+             const curvePath = requireNonEmptyString(args.curvePath, 'curvePath', 'Missing required parameter: curvePath');
+             const time = typeof args.time === 'number' ? args.time : parseFloat(args.time);
+             if (isNaN(time)) {
+               throw new Error('Invalid time parameter: must be a number');
+             }
+             
+             try {
+               // Execute Python template to add key to curve
+               const script = fillTemplate(PYTHON_TEMPLATES.ADD_CURVE_KEY, {
+                 curve_path: curvePath,
+                 time,
+                 value: args.value ?? 0.0,
+                 vector_x: args.vectorX ?? 0.0,
+                 vector_y: args.vectorY ?? 0.0,
+                 vector_z: args.vectorZ ?? 0.0
+               });
+               
+               const result = await tools.bridge.executePythonWithResult(script);
+               if (result?.success) {
+                 return cleanObject({
+                   success: true,
+                   curvePath,
+                   time,
+                   keyCount: result.keyCount || 1,
+                   message: result.message || `Key added to ${curvePath}`
+                 });
+               } else {
+                 return cleanObject({
+                   success: false,
+                   error: result?.error || 'Failed to add key to curve'
+                 });
+               }
+             } catch (e) {
+               return cleanObject({
+                 success: false,
+                 error: `Failed to add key: ${e instanceof Error ? e.message : String(e)}`
+               });
+             }
+           }
+           case 'evaluate': {
+             await elicitMissingPrimitiveArgs(
+               tools,
+               args,
+               'Provide details for manage_curves.evaluate',
+               {
+                 curvePath: {
+                   type: 'string',
+                   title: 'Curve Path',
+                   description: 'Content path to existing curve asset'
+                 },
+                 time: {
+                   type: 'number',
+                   title: 'Time',
+                   description: 'Time value to evaluate at'
+                 }
+               }
+             );
+             const curvePath = requireNonEmptyString(args.curvePath, 'curvePath', 'Missing required parameter: curvePath');
+             const time = typeof args.time === 'number' ? args.time : parseFloat(args.time);
+             if (isNaN(time)) {
+               throw new Error('Invalid time parameter: must be a number');
+             }
+             
+             try {
+               // Execute Python template to evaluate curve
+               const script = fillTemplate(PYTHON_TEMPLATES.EVALUATE_CURVE, {
+                 curve_path: curvePath,
+                 time
+               });
+               
+               const result = await tools.bridge.executePythonWithResult(script);
+               if (result?.success) {
+                 return cleanObject({
+                   success: true,
+                   curvePath,
+                   time,
+                   value: result.value ?? result.vectorValue?.x ?? 0.0,
+                   vectorValue: result.vectorValue,
+                   keyCount: result.keyCount,
+                   message: result.message || `Curve evaluated at time ${time}`
+                 });
+               } else {
+                 return cleanObject({
+                   success: false,
+                   error: result?.error || 'Failed to evaluate curve'
+                 });
+               }
+             } catch (e) {
+               return cleanObject({
+                 success: false,
+                 error: `Failed to evaluate curve: ${e instanceof Error ? e.message : String(e)}`
+               });
+             }
+           }
            case 'import': {
             await elicitMissingPrimitiveArgs(
               tools,
