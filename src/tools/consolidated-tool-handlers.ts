@@ -2737,7 +2737,95 @@ case 'inspect':
             throw new Error(`Unknown manage_tags action: ${args.action}`);
         }
 
-      // 27. SPLINE TOOLS - Phase 8.5
+      // 27. COMPONENT TOOLS - Phase 8.6
+      case 'manage_component':
+        switch (requireAction(args)) {
+          case 'add': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide details for manage_component.add',
+              {
+                actorName: {
+                  type: 'string',
+                  title: 'Actor Name',
+                  description: 'Actor label to add the component to'
+                },
+                componentType: {
+                  type: 'string',
+                  title: 'Component Type',
+                  description: 'Component class name or path'
+                }
+              }
+            );
+            const actorName = requireNonEmptyString(args.actorName, 'actorName', 'Missing required parameter: actorName');
+            const componentType = requireNonEmptyString(args.componentType, 'componentType', 'Missing required parameter: componentType');
+            if (args.location) {
+              requireVector3Components(args.location, 'location must include numeric x, y, z');
+            }
+            if (args.scale) {
+              requireVector3Components(args.scale, 'scale must include numeric x, y, z');
+            }
+            const res = await tools.componentTools.addComponent({
+              actorName,
+              componentType,
+              componentName: args.componentName,
+              parentComponent: args.parentComponent,
+              location: args.location,
+              rotation: args.rotation,
+              scale: args.scale,
+              mobility: typeof args.mobility === 'string' ? args.mobility : undefined,
+              registerComponent: args.registerComponent,
+              replaceExisting: args.replaceExisting === true
+            });
+            return cleanObject(res);
+          }
+          case 'remove': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide details for manage_component.remove',
+              {
+                actorName: {
+                  type: 'string',
+                  title: 'Actor Name',
+                  description: 'Actor label to remove the component from'
+                }
+              }
+            );
+            const actorName = requireNonEmptyString(args.actorName, 'actorName', 'Missing required parameter: actorName');
+            if (!args.componentName && !args.componentType) {
+              throw new Error('Provide componentName or componentType to remove a component');
+            }
+            const res = await tools.componentTools.removeComponent({
+              actorName,
+              componentName: args.componentName,
+              componentType: args.componentType
+            });
+            return cleanObject(res);
+          }
+          case 'get': {
+            await elicitMissingPrimitiveArgs(
+              tools,
+              args,
+              'Provide details for manage_component.get',
+              {
+                actorName: {
+                  type: 'string',
+                  title: 'Actor Name',
+                  description: 'Actor label to inspect'
+                }
+              }
+            );
+            const actorName = requireNonEmptyString(args.actorName, 'actorName', 'Missing required parameter: actorName');
+            const res = await tools.componentTools.getComponents({ actorName });
+            return cleanObject(res);
+          }
+          default:
+            throw new Error(`Unknown manage_component action: ${args.action}`);
+        }
+
+      // 28. SPLINE TOOLS - Phase 8.5
       case 'manage_spline':
         switch (requireAction(args)) {
           case 'create': {

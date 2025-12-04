@@ -43,6 +43,17 @@ These scenarios feed the automated harness in `tests/run-unreal-tool-tests.mjs`.
 
 ---
 
+## Component Tools (`src/tools/components.ts`)
+
+| # | Scenario | Example Input Payload | Expected Outcome |
+|---|----------|-----------------------|------------------|
+| 1 | Add debug scene component to MCP cube | `{"action":"add","actorName":"MCP_Cube_B","componentType":"SceneComponent","componentName":"MCP_DebugScene","location":{"x":0,"y":0,"z":0},"replaceExisting":true}` | Success response confirms the component was added to the actor. |
+
+| 2 | List components on MCP cube | `{"action":"get","actorName":"MCP_Cube_B"}` | Success response includes `MCP_DebugScene` in the component list. |
+| 3 | Remove previously added component | `{"action":"remove","actorName":"MCP_Cube_B","componentName":"MCP_DebugScene"}` | Success response indicates the component was removed. |
+
+---
+
 ## Asset Tools (`src/tools/assets.ts`)
 
 | # | Scenario | Example Input Payload | Expected Outcome |

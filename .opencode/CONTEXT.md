@@ -172,8 +172,9 @@ Enable in **Edit → Plugins**:
 ### Files Over 1000 Lines (Acceptable)
 | File | Lines | Reason OK |
 |------|-------|-----------|
-| `consolidated-tool-handlers.ts` | ~2200 | All 24 tools in one switch - splitting would require complex imports |
-| `consolidated-tool-definitions.ts` | ~1800 | All 24 tool schemas - splitting fragments the API surface |
+| `consolidated-tool-handlers.ts` | ~2200 | All 25 tools in one switch - splitting would require complex imports |
+| `consolidated-tool-definitions.ts` | ~1800 | All 25 tool schemas - splitting fragments the API surface |
+
 | `lighting.ts` | ~1400 | 14 coherent lighting methods |
 | `actors.ts` | ~1150 | 10 coherent actor methods |
 | `blueprint.ts` | ~1050 | 7 coherent blueprint methods |
@@ -188,8 +189,9 @@ See **TODO.md** for full roadmap (Phases 6-11).
 | 1-5 | Foundation, RC API, testing | ✅ Complete |
 | 6 | C++ Workflow (templates, GAS, CommonUI) | ✅ Complete & Tested 2025-12-02 |
 | 7 | Easy Wins (Materials, Rendering, Input, Collision, Sequence) | ✅ Complete 2025-12-02 |
-  | **8** | Medium Features (8 items, reordered easy→hard) | **In Progress** (5/8 complete - 8.1-8.5 implemented, 8.2-8.4 still placeholder-backed) |
+  | **8** | Medium Features (8 items, reordered easy→hard) | **In Progress** (6/8 complete - 8.1-8.6 implemented, 8.2-8.4 still placeholder-backed) |
  | 9 | CommonUI Runtime → GAS Runtime | Pending |
+
  | 10 | Blueprint Graph Editing (needs C++ plugin) | Lower Priority |
  | 11 | Advanced/Research (World Partition, Skeletal, BT, PCG, etc.) | Future |
 
@@ -236,9 +238,13 @@ See **TODO.md** for full roadmap (Phases 6-11).
       - Create spline actors, add/update/remove points, inspect data, and sample along the curve
       - Uses Python fallback utilities to ensure a spline component exists even when the default actor lacks one
       - Docs/tests updated (`docs/unreal-tool-test-cases.md`, `tests/run-unreal-tool-tests.mjs`) with 4 new scenarios (create/add/get/sample)
- 6. Component Management (`manage_component`)
- 7. DataTables (`manage_datatable`)
- 8. NavMesh Config (`manage_navigation`)
+  6. ✅ **Component Management** (`manage_component`) - **Fully Implemented** 2025-12-04
+       - Add/remove/list components on placed level actors with attachment/mobility support
+       - Python helper resolves component classes from names/paths and ensures safe registration flows
+       - Documented and tested with add/get/remove automation loops
+  7. DataTables (`manage_datatable`)
+  8. NavMesh Config (`manage_navigation`)
+
 
 
 ## Key UE Systems to Support
@@ -286,7 +292,8 @@ When adding new functionality:
 3. Export constants and functions, not classes when possible
 4. Use existing patterns (e.g., `RESULT:` prefix for Python output parsing)
 
-## Tool Reference (24 Tools)
+## Tool Reference (25 Tools)
+
 
 | Tool | Purpose | Key Actions |
 |------|---------|-------------|
@@ -316,7 +323,9 @@ When adding new functionality:
  | **`manage_curves`** | Curve Assets (Phase 8.2) | create, add_key, evaluate, import, export | ✅ Implemented 2025-12-02 (placeholder) |
  | **`manage_gamemode`** | Game Framework (Phase 8.3) | create_framework, set_default_classes, configure_replication, setup_input | ✅ Implemented 2025-12-02 (placeholder) |
  | **`manage_tags`** | Actor Tags (Phase 8.4) | add, remove, has, get_all, clear, query | ✅ Implemented 2025-12-02 (placeholder) |
+ | **`manage_component`** | Component authoring (Phase 8.6) | add, remove, get | ✅ Implemented 2025-12-04 |
  | **`manage_spline`** | Spline authoring (Phase 8.5) | create, add_point, set_point, remove_point, get_points, sample | ✅ Implemented 2025-12-04 |
+
 
 ## Coordinates & Units
 
@@ -740,7 +749,8 @@ The `manage_asset` tool's `search` action had multiple issues:
 
  **Phase 8.2-8.4 Implementation Strategy (2025-12-02):**
 Implemented three new tools using a **placeholder-first approach**:
-1. **Complete tool definitions** in `consolidated-tool-definitions.ts` (tools #24-26)
+1. **Complete tool definitions** in `consolidated-tool-definitions.ts` for the Phase 8.2-8.4 tools
+
 2. **Full handler implementations** in `consolidated-tool-handlers.ts` with proper elicitation
 3. **Tool classes** with placeholder implementations that return success + warning
 4. **Python templates** ready for real implementation

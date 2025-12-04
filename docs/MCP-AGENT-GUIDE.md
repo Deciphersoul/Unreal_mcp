@@ -296,7 +296,28 @@ manage_spline action:sample actorName:MCP_Spline_Test distance:100
 
 ---
 
-### 10. create_effect
+### 10. manage_component
+Actor component management.
+
+| Action | Required Params | Optional Params | Description |
+|--------|----------------|-----------------|-------------|
+| `add` | `actorName`, `componentType` | `componentName`, `parentComponent`, `location`, `rotation`, `scale`, `mobility`, `registerComponent`, `replaceExisting` | Add a component to an actor and optionally attach/configure it |
+| `remove` | `actorName` | `componentName`, `componentType` | Remove a component by name or class |
+| `get` | `actorName` | - | List all components attached to an actor |
+
+**Examples:**
+```
+# Add a scene component at the actor origin
+manage_component action:add actorName:MCP_Cube_B componentType:SceneComponent componentName:MCP_DebugScene location:{x:0,y:0,z:0}
+
+# List and remove the component
+manage_component action:get actorName:MCP_Cube_B
+manage_component action:remove actorName:MCP_Cube_B componentName:MCP_DebugScene
+```
+
+---
+
+### 11. create_effect
 Visual effects and debug shapes.
 
 | Action | Required Params | Optional Params | Description |
@@ -316,7 +337,7 @@ create_effect action:particle effectType:Fire location:{x:0,y:0,z:0}
 
 ---
 
-### 11. debug_extended
+### 12. debug_extended
 Error tracking and diagnostics.
 
 | Action | Description |
@@ -344,7 +365,7 @@ debug_extended action:get_log category:LogBlueprint lines:50
 
 ---
 
-### 12. editor_lifecycle
+### 13. editor_lifecycle
 Editor state and save operations.
 
 | Action | Description |
@@ -363,7 +384,7 @@ Editor state and save operations.
 
 ---
 
-### 13. system_control
+### 14. system_control
 Performance and system utilities.
 
 | Action | Required Params | Description |
@@ -376,7 +397,7 @@ Performance and system utilities.
 
 ---
 
-### 14. project_build
+### 15. project_build
 Packaging and builds.
 
 | Action | Required Params | Description |
@@ -390,7 +411,7 @@ Packaging and builds.
 
 ---
 
-### 15. console_command
+### 16. console_command
 Direct console access (with safety checks).
 
 **Example:**

@@ -595,6 +595,15 @@ function enrichTestCase(rawCase) {
         arguments: payloadValue
       };
     }
+    case 'Component Tools': {
+      if (!payloadValue) return { ...base, skipReason: 'No JSON payload provided' };
+      if (!payloadValue.action) return { ...base, skipReason: 'Missing action in payload' };
+      return {
+        ...base,
+        toolName: 'manage_component',
+        arguments: payloadValue
+      };
+    }
     case 'Spline Tools': {
       if (!payloadValue) return { ...base, skipReason: 'No JSON payload provided' };
       if (!payloadValue.action) return { ...base, skipReason: 'Missing action in payload' };

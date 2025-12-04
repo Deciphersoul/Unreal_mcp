@@ -143,7 +143,7 @@ Then enable Python execution in: Edit > Project Settings > Plugins > Remote Cont
 }
 ```
 
-## Available Tools (24)
+## Available Tools (25)
 
 | Tool | Description |
 |------|-------------|
@@ -170,6 +170,7 @@ Then enable Python execution in: Edit > Project Settings > Plugins > Remote Cont
 | `manage_rendering` | UE5 rendering control (Nanite, Lumen, VSM, ray tracing) |
 | `manage_input` | UE5 Enhanced Input System (InputActions, MappingContexts) |
 | `manage_collision` | Collision preset and channel configuration |
+| `manage_component` | Add/remove/list components on level actors |
 | `manage_spline` | Create and edit spline actors, manipulate points, and sample along curves |
 
 

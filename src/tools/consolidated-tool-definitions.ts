@@ -2098,7 +2098,128 @@ Supported actions: add, remove, has, get_all, clear, query.`,
     }
   },
 
-  // 27. SPLINE TOOLS - Phase 8.5
+  // 27. COMPONENT TOOLS - Phase 8.6
+  {
+    name: 'manage_component',
+    description: `Actor component management toolkit.
+
+Use it when you need to:
+- add a component to an existing actor.
+- remove a specific component from an actor.
+- inspect components attached to an actor.
+
+Supported actions: add, remove, get.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action: {
+          type: 'string',
+          enum: ['add', 'remove', 'get'],
+          description: 'Component action to perform'
+        },
+        actorName: { type: 'string', description: 'Actor label/name to operate on.' },
+        componentType: { type: 'string', description: 'Component class path or name (StaticMeshComponent, SceneComponent, etc.). Required for add and optional for remove.' },
+        componentName: { type: 'string', description: 'Component name to create or target for removal.' },
+        parentComponent: { type: 'string', description: 'Optional parent component name to attach to (defaults to root).' },
+        location: {
+          type: 'object',
+          description: 'Relative location for new scene components.',
+          properties: {
+            x: { type: 'number' },
+            y: { type: 'number' },
+            z: { type: 'number' }
+          }
+        },
+        rotation: {
+          type: 'object',
+          description: 'Relative rotation for new scene components.',
+          properties: {
+            pitch: { type: 'number' },
+            yaw: { type: 'number' },
+            roll: { type: 'number' }
+          }
+        },
+        scale: {
+          type: 'object',
+          description: 'Relative scale for new scene components.',
+          properties: {
+            x: { type: 'number' },
+            y: { type: 'number' },
+            z: { type: 'number' }
+          }
+        },
+        mobility: {
+          type: 'string',
+          enum: ['Static', 'Stationary', 'Movable'],
+          description: 'Optional mobility override for primitive components.'
+        },
+        registerComponent: {
+          type: 'boolean',
+          description: 'If true (default), registers the new component after creation.'
+        },
+        replaceExisting: {
+          type: 'boolean',
+          description: 'If true, destroy any component with the same name before adding a new one.'
+        }
+      },
+      required: ['action']
+    },
+    outputSchema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', description: 'Whether the operation succeeded' },
+        message: { type: 'string', description: 'Status message' },
+        actorName: { type: 'string', description: 'Actor name used for the operation' },
+        componentName: { type: 'string', description: 'Component name affected' },
+        componentClass: { type: 'string', description: 'Component class affected' },
+        attachedTo: { type: 'string', description: 'Parent component name for new scene components' },
+        components: {
+          type: 'array',
+          description: 'Full component listing for get action.',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              className: { type: 'string' },
+              isRegistered: { type: 'boolean' },
+              isSceneComponent: { type: 'boolean' },
+              isPrimitiveComponent: { type: 'boolean' },
+              attachedTo: { type: 'string' },
+              relativeLocation: {
+                type: 'object',
+                properties: {
+                  x: { type: 'number' },
+                  y: { type: 'number' },
+                  z: { type: 'number' }
+                }
+              },
+              relativeRotation: {
+                type: 'object',
+                properties: {
+                  pitch: { type: 'number' },
+                  yaw: { type: 'number' },
+                  roll: { type: 'number' }
+                }
+              },
+              relativeScale: {
+                type: 'object',
+                properties: {
+                  x: { type: 'number' },
+                  y: { type: 'number' },
+                  z: { type: 'number' }
+                }
+              },
+              mobility: { type: 'string' }
+            }
+          }
+        },
+        count: { type: 'number', description: 'Number of components returned for get action' },
+        error: { type: 'string', description: 'Error message if failed' }
+      }
+    }
+  },
+
+  // 28. SPLINE TOOLS - Phase 8.5
   {
     name: 'manage_spline',
     description: `Spline authoring toolkit for creating and editing spline actors.

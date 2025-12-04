@@ -1,6 +1,6 @@
 # UE MCP Extended
 
-MCP server providing **24 tools** for Unreal Engine 5.7 development.
+MCP server providing **25 tools** for Unreal Engine 5.7 development.
 
 
 ## Purpose
@@ -76,7 +76,7 @@ See **TODO.md** for detailed Phase 6-11 roadmap.
 | 1-5 | Foundation (RC API, testing) | ✅ Complete |
 | 6 | C++ Workflow (GAS, CommonUI scaffolding) | ✅ Complete & Tested |
 | 7 | Easy Wins (Materials, Rendering, Input, Collision, Sequence) | ✅ Complete 2025-12-02 |
- | **8** | Medium Features (8 items, easy→hard) | **In Progress** (5/8 complete - 8.1-8.5 implemented, 8.2-8.4 still using placeholders) |
+ | **8** | Medium Features (8 items, easy→hard) | **In Progress** (6/8 complete - 8.1-8.6 implemented, 8.2-8.4 still using placeholders) |
 
 | 9 | CommonUI → GAS Runtime | Pending |
 | 10 | Blueprint Graph Editing (C++ plugin) | Lower Priority |
@@ -118,7 +118,10 @@ See **TODO.md** for detailed Phase 6-11 roadmap.
     - Create spline actors, add/update/remove points, inspect data, and sample along the curve
     - Uses Python fallback with helper utilities to spawn spline actors even when default component is missing
     - Fully wired into docs/tests (`docs/unreal-tool-test-cases.md`, `tests/run-unreal-tool-tests.mjs`)
- 6. Component Management (`manage_component`)
+ 6. ✅ **Component Management** (`manage_component`) - **Implemented 2025-12-04**
+    - Add, remove, and list components on placed level actors with attachment/mobility support
+    - Python helper resolves component classes from names or paths and ensures safe registration/attachment flows
+    - Documented and tested with new scenarios covering add/get/remove automation loops
  7. DataTables (`manage_datatable`)
  8. NavMesh Config (`manage_navigation`)
 
